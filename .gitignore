@@ -16,6 +16,9 @@ __pycache__/
 .env.local
 .env.production
 
+# Language state persistence
+.language_state.json
+
 # IDE
 .vscode/
 .idea/

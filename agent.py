@@ -1,5 +1,7 @@
 from dotenv import load_dotenv
 import re
+import os
+import json
 
 from livekit import agents
 from livekit.agents import AgentSession, Agent, RoomInputOptions
@@ -39,6 +41,36 @@ class Assistant(Agent):
         self.emotions_hook = EmotionsMiddleware()
         self.android_hook = AndroidControlMiddleware()
 
+        # Language persistence
+        self.language_state_file = os.path.join(os.path.dirname(__file__), '.language_state.json')
+        self.load_language_state()
+
+    def load_language_state(self):
+        """Load language state from file for consistency across runs"""
+        try:
+            if os.path.exists(self.language_state_file):
+                with open(self.language_state_file, 'r', encoding='utf-8') as f:
+                    state = json.load(f)
+                    if 'user_lang' in state:
+                        self.language_hook.user_lang = state['user_lang']
+                    if 'language_history' in state:
+                        self.language_hook.language_history = state['language_history']
+                    print(f"Loaded language state: {self.language_hook.user_lang}")
+        except Exception as e:
+            print(f"Could not load language state: {e}")
+
+    def save_language_state(self):
+        """Save language state to file for consistency across runs"""
+        try:
+            state = {
+                'user_lang': self.language_hook.user_lang,
+                'language_history': self.language_hook.language_history
+            }
+            with open(self.language_state_file, 'w', encoding='utf-8') as f:
+                json.dump(state, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"Could not save language state: {e}")
+
     def process_user_input(self, text):
         # Detect and set user language
         return self.language_hook.process_user_input(text)
@@ -52,12 +84,10 @@ class Assistant(Agent):
         return self.language_hook.get_tts_language()
 
     def process_query_with_middlewares(self, user_text):
-        # Always reset state for every query
-        self.language_hook.user_lang = 'en'
-        # user_gender = "female"  # Not used, removed to clean up code
-        web_result = None  # Initialize web_result
+        # Initialize web_result
+        web_result = None
 
-        # Always detect user language and switch if changed
+        # Always detect user language and maintain consistency
         self.language_hook.process_user_input(user_text)
         detected_lang = self.language_hook.user_lang
 
@@ -158,6 +188,9 @@ class Assistant(Agent):
         if self.strict_tts_sync is None:
             from tts_sync_middleware import StrictTTSSyncMiddleware
             self.strict_tts_sync = StrictTTSSyncMiddleware()
+
+        # Save language state for consistency across runs
+        self.save_language_state()
 
         # Use web_result if available for strict TTS (now properly scoped)
         tts_text = self.strict_tts_sync.get_strict_tts_text(final_reply, web_result, persona='female', tts_lang=self.language_hook.get_tts_language())
