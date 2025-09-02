@@ -48,8 +48,6 @@ Examples of when to use tools:
         )
         from language_middleware import StrictPersonaAgentHook
         self.language_hook = StrictPersonaAgentHook()
-        from search_middleware import FastSearchMiddleware
-        self.search_hook = FastSearchMiddleware(timeout=5)
         self.tts_sync = TTSSyncMiddleware()
         self.strict_tts_sync = None  # Will be initialized for strict TTS
         self.emotions_hook = EmotionsMiddleware()
@@ -181,13 +179,8 @@ Examples of when to use tools:
                             agent_reply = "To send an email, please say: 'send email to [email] subject [subject] message [message]'"
                         break
                     elif tool == 'search':
-                        # Handle search requests
-                        web_result = self.search_hook.process_user_query(user_text)
-                        if web_result and isinstance(web_result, str) and web_result.strip():
-                            agent_reply = web_result
-                        else:
-                            agent_reply = "I couldn't find information for your search query."
-                            web_result = None
+                        # Let the LiveKit tool handle the search
+                        agent_reply = f"I'll search for information about: {user_text}"
                         break
 
             if not tool_detected:
@@ -219,13 +212,8 @@ Examples of when to use tools:
                               info_keyword_count >= 1 or len(user_text.split()) > 8)
 
                 if needs_search:
-                    # Use web search for information queries
-                    web_result = self.search_hook.process_user_query(user_text)
-                    if web_result and isinstance(web_result, str) and web_result.strip():
-                        agent_reply = web_result
-                    else:
-                        agent_reply = "I couldn't find accurate information for your query."
-                        web_result = None
+                    # Let the LiveKit framework handle search through tools
+                    agent_reply = f"I'll search for information about: {user_text}"
                 else:
                     # Priority 3: Casual conversation (lowest priority - use agent)
                     agent_reply = AGENT_INSTRUCTION.split("# Examples")[0].strip()

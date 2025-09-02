@@ -33,15 +33,26 @@ async def search_web(
     context: RunContext,  # type: ignore
     query: str) -> str:
     """
-    Search the web using DuckDuckGo.
+    Search the web using DuckDuckGo with enhanced formatting.
     """
     try:
-        results = DuckDuckGoSearchRun().run(tool_input=query)
-        logging.info(f"Search results for '{query}': {results}")
-        return results
+        # Import our custom search middleware
+        from search_middleware import FastSearchMiddleware
+
+        # Use our enhanced search middleware
+        search_hook = FastSearchMiddleware(timeout=10, max_results=3)
+        results = search_hook.get_web_result(query)
+
+        if results and results.strip():
+            logging.info(f"Search successful for '{query}': Found results")
+            return results
+        else:
+            logging.warning(f"No results found for query: {query}")
+            return f"I couldn't find any information about '{query}'. Please try rephrasing your question."
+
     except Exception as e:
         logging.error(f"Error searching the web for '{query}': {e}")
-        return f"An error occurred while searching the web for '{query}'."    
+        return f"Sorry, I encountered an error while searching for '{query}'. Please try again."
 
 @function_tool()    
 async def send_email(
