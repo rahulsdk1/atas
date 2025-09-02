@@ -25,5 +25,21 @@ EXPOSE 5000
 ENV FLASK_APP=token_server.py
 ENV FLASK_RUN_HOST=0.0.0.0
 
-# Run the application with Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--threads", "2", "token_server:app"]
+# Create a startup script to run both services
+RUN echo '#!/bin/bash\n\
+echo "Starting ATAS Voice Assistant..."\n\
+\n\
+# Start the token server in background\n\
+gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 2 token_server:app &\n\
+\n\
+# Wait for token server to start\n\
+sleep 3\n\
+echo "Token server started on port 5000"\n\
+\n\
+# Start the LiveKit agent worker\n\
+echo "Starting LiveKit agent worker..."\n\
+python agent.py\n\
+' > /app/start.sh && chmod +x /app/start.sh
+
+# Run both services
+CMD ["/app/start.sh"]

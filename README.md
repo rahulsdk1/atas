@@ -38,14 +38,17 @@ docker run -p 5000:5000 --env-file .env atas-voice-assistant
 
 ### Deploy to Google Cloud Run
 1. **Push to GitHub first**
-2. **Connect GitHub to Google Cloud Build**
-3. **Use this simple deployment command:**
+2. **Deploy both token server and agent:**
    ```bash
    gcloud run deploy atas-voice-assistant \
-     --source . \
+     --source https://github.com/rahulsdk1/atas \
      --platform managed \
      --region us-central1 \
      --allow-unauthenticated \
      --set-env-vars LIVEKIT_API_KEY="your-key",LIVEKIT_API_SECRET="your-secret",LIVEKIT_URL="your-url"
    ```
+
+### Services Running:
+- **Token Server**: `https://your-service-url/token` (port 5000)
+- **LiveKit Agent**: Runs as background worker for voice interactions
 
