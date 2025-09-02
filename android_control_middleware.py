@@ -7,7 +7,24 @@ No changes required to original code. Import and use hooks as needed.
 """
 import re
 import subprocess
+import logging
 from language_middleware import detect_language, translate_text
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Check if ADB is available
+def is_adb_available():
+    try:
+        result = subprocess.run(["adb", "version"], capture_output=True, text=True, timeout=5)
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+ADB_AVAILABLE = is_adb_available()
+if not ADB_AVAILABLE:
+    logger.warning("ADB is not available. Android control functions will not work on real devices.")
 
 # Example command patterns (expand as needed)
 COMMAND_PATTERNS = {
@@ -163,7 +180,26 @@ COMMAND_PATTERNS = {
 
 class AndroidControlMiddleware:
     def __init__(self):
-        pass
+        # Map common app names to package names
+        self.package_map = {
+            'chrome': 'com.android.chrome',
+            'youtube': 'com.google.android.youtube',
+            'whatsapp': 'com.whatsapp',
+            'facebook': 'com.facebook.katana',
+            'instagram': 'com.instagram.android',
+            'settings': 'com.android.settings',
+            'camera': 'com.android.camera',
+            'gallery': 'com.android.gallery',
+            'calculator': 'com.android.calculator2',
+            'clock': 'com.android.deskclock',
+            'contacts': 'com.android.contacts',
+            'phone': 'com.android.dialer',
+            'messages': 'com.android.mms',
+            'music': 'com.android.music',
+            'maps': 'com.google.android.apps.maps',
+            'gmail': 'com.google.android.gm',
+            'playstore': 'com.android.vending'
+        }
 
     def detect_command(self, text):
         """Detects which command pattern matches the user text."""
@@ -174,50 +210,142 @@ class AndroidControlMiddleware:
         return None, None
 
     def execute_command(self, cmd, args):
-        """Executes the detected command using ADB (as example)."""
-        # This is a stub. Replace with actual ADB/Appium/custom service calls.
-        if cmd == 'open_app':
-            app_name = args[0]
-            # Example: subprocess.run(["adb", "shell", "monkey", "-p", f"com.{app_name}", "1"])
-            return f"Opening {app_name} app."
-        elif cmd == 'close_app':
-            app_name = args[0]
-            # Example: subprocess.run(["adb", "shell", "am", "force-stop", f"com.{app_name}"])
-            return f"Closing {app_name} app."
-        elif cmd == 'search_youtube':
-            query = args[0]
-            return f"Searching YouTube for {query}."
-        elif cmd == 'play_youtube':
-            query = args[0]
-            return f"Playing {query} on YouTube."
-        elif cmd == 'set_volume':
-            direction = args[0]
-            return f"Setting volume {direction}."
-        elif cmd == 'set_quality':
-            direction = args[0]
-            return f"Setting YouTube quality {direction}."
-        elif cmd == 'scroll_feed':
-            feed = args[0]
-            return f"Scrolling {feed}."
-        elif cmd == 'send_message':
-            contact = args[0]
-            return f"Sending message to {contact}."
-        elif cmd == 'install_app':
-            app = args[0]
-            return f"Installing {app}."
-        elif cmd == 'uninstall_app':
-            app = args[0]
-            return f"Uninstalling {app}."
-        elif cmd == 'control_flashlight':
-            action = args[0]
-            return f"{action.capitalize()} flashlight."
-        elif cmd == 'set_brightness':
-            level = args[1]
-            return f"Setting brightness to {level}%."
-        elif cmd == 'update_android':
-            return "Updating Android software."
-        else:
-            return "Command not recognized."
+        """Executes the detected command using ADB."""
+        if not ADB_AVAILABLE:
+            return "ADB is not available. Cannot execute Android commands on real device."
+
+        try:
+            if cmd == 'open_app':
+                app_name = args[0]
+                package = self.package_map.get(app_name.lower(), f"com.{app_name}")
+                result = subprocess.run(["adb", "shell", "monkey", "-p", package, "1"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    logger.info(f"Successfully opened {app_name} app.")
+                    return f"Opening {app_name} app."
+                else:
+                    logger.error(f"Failed to open {app_name}: {result.stderr}")
+                    return f"Failed to open {app_name} app."
+
+            elif cmd == 'close_app':
+                app_name = args[0]
+                package = self.package_map.get(app_name.lower(), f"com.{app_name}")
+                result = subprocess.run(["adb", "shell", "am", "force-stop", package], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    logger.info(f"Successfully closed {app_name} app.")
+                    return f"Closing {app_name} app."
+                else:
+                    logger.error(f"Failed to close {app_name}: {result.stderr}")
+                    return f"Failed to close {app_name} app."
+
+            elif cmd == 'search_youtube':
+                query = args[0]
+                # Use ADB to open YouTube search
+                result = subprocess.run(["adb", "shell", "am", "start", "-a", "android.intent.action.SEARCH", "-d", f"youtube://search?q={query}"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return f"Searching YouTube for {query}."
+                else:
+                    return f"Failed to search YouTube for {query}."
+
+            elif cmd == 'play_youtube':
+                query = args[0]
+                result = subprocess.run(["adb", "shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", f"https://www.youtube.com/results?search_query={query}"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return f"Playing {query} on YouTube."
+                else:
+                    return f"Failed to play {query} on YouTube."
+
+            elif cmd == 'set_volume':
+                direction = args[0]
+                if direction in ['up', 'increase', 'raise']:
+                    result = subprocess.run(["adb", "shell", "input", "keyevent", "24"], capture_output=True, text=True, timeout=5)
+                elif direction in ['down', 'decrease', 'lower']:
+                    result = subprocess.run(["adb", "shell", "input", "keyevent", "25"], capture_output=True, text=True, timeout=5)
+                elif direction == 'mute':
+                    result = subprocess.run(["adb", "shell", "input", "keyevent", "164"], capture_output=True, text=True, timeout=5)
+                else:
+                    return f"Unknown volume direction: {direction}"
+                if result.returncode == 0:
+                    return f"Setting volume {direction}."
+                else:
+                    return f"Failed to set volume {direction}."
+
+            elif cmd == 'set_brightness':
+                level = args[1]
+                # Brightness control via ADB (may require root or system app)
+                result = subprocess.run(["adb", "shell", "settings", "put", "system", "screen_brightness", level], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return f"Setting brightness to {level}%."
+                else:
+                    return f"Failed to set brightness to {level}%."
+
+            elif cmd == 'take_screenshot':
+                result = subprocess.run(["adb", "shell", "screencap", "-p", "/sdcard/screenshot.png"], capture_output=True, text=True, timeout=15)
+                if result.returncode == 0:
+                    return "Screenshot taken and saved to /sdcard/screenshot.png."
+                else:
+                    return "Failed to take screenshot."
+
+            elif cmd == 'lock_device':
+                result = subprocess.run(["adb", "shell", "input", "keyevent", "26"], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    return "Device locked."
+                else:
+                    return "Failed to lock device."
+
+            elif cmd == 'unlock_device':
+                # Note: Unlocking may require PIN/pattern, this just wakes the screen
+                result = subprocess.run(["adb", "shell", "input", "keyevent", "82"], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    return "Device unlocked (screen on)."
+                else:
+                    return "Failed to unlock device."
+
+            elif cmd == 'open_camera':
+                result = subprocess.run(["adb", "shell", "am", "start", "-a", "android.media.action.IMAGE_CAPTURE"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Opening camera."
+                else:
+                    return "Failed to open camera."
+
+            elif cmd == 'close_camera':
+                # Force stop camera app
+                result = subprocess.run(["adb", "shell", "am", "force-stop", "com.android.camera"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Closing camera."
+                else:
+                    return "Failed to close camera."
+
+            elif cmd == 'toggle_wifi':
+                action = args[0]
+                if action in ['turn on', 'enable']:
+                    result = subprocess.run(["adb", "shell", "svc", "wifi", "enable"], capture_output=True, text=True, timeout=10)
+                elif action in ['turn off', 'disable']:
+                    result = subprocess.run(["adb", "shell", "svc", "wifi", "disable"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return f"WiFi {action}."
+                else:
+                    return f"Failed to {action} WiFi."
+
+            elif cmd == 'toggle_bluetooth':
+                action = args[0]
+                if action in ['turn on', 'enable']:
+                    result = subprocess.run(["adb", "shell", "svc", "bluetooth", "enable"], capture_output=True, text=True, timeout=10)
+                elif action in ['turn off', 'disable']:
+                    result = subprocess.run(["adb", "shell", "svc", "bluetooth", "disable"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return f"Bluetooth {action}."
+                else:
+                    return f"Failed to {action} Bluetooth."
+
+            else:
+                return f"Command '{cmd}' not implemented yet."
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"Command {cmd} timed out.")
+            return f"Command {cmd} timed out."
+        except Exception as e:
+            logger.error(f"Error executing command {cmd}: {str(e)}")
+            return f"Error executing command {cmd}: {str(e)}"
 
     def process_user_command(self, text):
         lang = detect_language(text)
