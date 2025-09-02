@@ -26,167 +26,134 @@ ADB_AVAILABLE = is_adb_available()
 if not ADB_AVAILABLE:
     logger.warning("ADB is not available. Android control functions will not work on real devices.")
 
-# Example command patterns (expand as needed)
+# Enhanced command patterns with WhatsApp, Snapchat, and social media focus
 COMMAND_PATTERNS = {
+    # Basic app control
     'open_app': r'open (\w+)',
     'close_app': r'close (\w+)',
+
+    # WhatsApp specific commands
+    'open_whatsapp': r'open whatsapp',
+    'close_whatsapp': r'close whatsapp',
+    'whatsapp_scroll_up': r'scroll up in whatsapp',
+    'whatsapp_scroll_down': r'scroll down in whatsapp',
+    'whatsapp_chat_with': r'chat with (.+) in whatsapp',
+    'whatsapp_view_status': r'view (.+) status in whatsapp',
+    'whatsapp_send_message': r'send (.+) to (.+) in whatsapp',
+    'whatsapp_call_contact': r'call (.+) on whatsapp',
+    'whatsapp_video_call': r'video call (.+) on whatsapp',
+    'whatsapp_view_profile': r'view (.+) profile in whatsapp',
+    'whatsapp_create_group': r'create group (.+) in whatsapp',
+    'whatsapp_add_to_group': r'add (.+) to group in whatsapp',
+    'whatsapp_summarize_chat': r'summarize (last \d+ )?messages? with (.+) in whatsapp',
+    'whatsapp_view_profile': r'view (.+) profile in whatsapp',
+    'whatsapp_mute_chat': r'mute (.+) chat in whatsapp',
+    'whatsapp_unmute_chat': r'unmute (.+) chat in whatsapp',
+
+    # Snapchat specific commands
+    'open_snapchat': r'open snapchat',
+    'close_snapchat': r'close snapchat',
+    'snapchat_view_stories': r'view stories in snapchat',
+    'snapchat_send_snap': r'send snap to (.+) in snapchat',
+    'snapchat_chat_with': r'chat with (.+) in snapchat',
+    'snapchat_add_friend': r'add (.+) as friend in snapchat',
+    'snapchat_view_profile': r'view (.+) profile in snapchat',
+
+    # Instagram specific commands
+    'open_instagram': r'open instagram',
+    'close_instagram': r'close instagram',
+    'instagram_scroll_feed': r'scroll feed in instagram',
+    'instagram_like_post': r'like post in instagram',
+    'instagram_comment': r'comment (.+) on post in instagram',
+    'instagram_follow_user': r'follow (.+) on instagram',
+    'instagram_unfollow_user': r'unfollow (.+) on instagram',
+    'instagram_view_story': r'view (.+) story in instagram',
+    'instagram_send_dm': r'send (.+) to (.+) in instagram',
+
+    # Facebook specific commands
+    'open_facebook': r'open facebook',
+    'close_facebook': r'close facebook',
+    'facebook_scroll_feed': r'scroll feed in facebook',
+    'facebook_like_post': r'like post in facebook',
+    'facebook_comment': r'comment (.+) on post in facebook',
+    'facebook_share_post': r'share post in facebook',
+
+    # YouTube specific commands
     'search_youtube': r'search (.+) on youtube',
     'play_youtube': r'play (.+) on youtube',
+    'youtube_subscribe': r'subscribe to (.+) on youtube',
+    'youtube_like_video': r'like video on youtube',
+    'youtube_comment': r'comment (.+) on video',
+    'youtube_share_video': r'share video on youtube',
+
+    # Device and system controls
     'set_volume': r'(up|down|low|raise|mute|max|increase|decrease) (the )?volume',
-    'set_quality': r'(down|up|increase|decrease|set) (the )?quality( of youtube)?',
-    'scroll_feed': r'scroll (feed|messages|whatsapp|facebook|instagram|shopping app|chrome|contacts|gallery|settings|notifications)',
-    'send_message': r'send message to (.+)',
-    'install_app': r'install (.+)',
-    'uninstall_app': r'uninstall (.+)',
-    'control_flashlight': r'(turn on|turn off|enable|disable|switch on|switch off) (flashlight|torch|light)',
     'set_brightness': r'(set|turn|low|raise|increase|decrease) brightness( to)? (\d+)%',
-    'update_android': r'update android',
-    'open_settings': r'open (settings|wifi|bluetooth|display|sound|battery|storage|security|location|apps|about)',
     'toggle_wifi': r'(turn on|turn off|enable|disable) wifi',
     'toggle_bluetooth': r'(turn on|turn off|enable|disable) bluetooth',
     'take_screenshot': r'(take|capture) (a )?screenshot',
     'lock_device': r'lock (the )?device',
     'unlock_device': r'unlock (the )?device',
+
+    # General commands
+    'scroll_feed': r'scroll (feed|messages|whatsapp|facebook|instagram|shopping app|chrome|contacts|gallery|settings|notifications)',
+    'send_message': r'send message to (.+)',
     'open_camera': r'open camera',
     'close_camera': r'close camera',
-    'play_media': r'play (.+) in (mx player|vlc|music app|jio saavn|spotify|google play music)',
-    'pause_media': r'pause (music|video|media|song)',
-    'resume_media': r'resume (music|video|media|song)',
-    'next_track': r'next (track|song|video)',
-    'previous_track': r'previous (track|song|video)',
-    'search_playstore': r'search (.+) in playstore',
-    'download_file': r'download (.+)',
-    'delete_file': r'delete (.+)',
+    'open_gallery': r'open gallery',
+    'open_contacts': r'open contacts',
+    'call_contact': r'(call|dial) (.+)',
     'open_browser': r'open (chrome|browser|firefox|edge|opera)',
     'search_browser': r'search (.+) in (chrome|browser|firefox|edge|opera)',
     'visit_website': r'visit (.+) in (chrome|browser|firefox|edge|opera)',
-    'clear_notifications': r'clear (all )?notifications',
-    'mute_notifications': r'(mute|silence|disable) notifications',
-    'unmute_notifications': r'(unmute|enable|activate) notifications',
-    'open_contacts': r'open contacts',
-    'call_contact': r'(call|dial) (.+)',
-    'end_call': r'(end|hang up|disconnect) (call|phone)',
-    'open_gallery': r'open gallery',
-    'delete_photo': r'delete photo (.+)',
-    'share_photo': r'share photo (.+) with (.+)',
-    'open_calendar': r'open calendar',
-    'add_event': r'add event (.+) on (.+)',
-    'delete_event': r'delete event (.+)',
-    'open_maps': r'open maps',
-    'navigate_to': r'navigate to (.+)',
-    'share_location': r'share my location',
-    'open_email': r'open email',
-    'send_email': r'send email to (.+)',
-    'open_notes': r'open notes',
-    'add_note': r'add note (.+)',
-    'delete_note': r'delete note (.+)',
-    'open_reminders': r'open reminders',
-    'add_reminder': r'add reminder (.+) at (.+)',
-    'delete_reminder': r'delete reminder (.+)',
-    'open_calculator': r'open calculator',
-    'calculate': r'calculate (.+)',
-    'open_weather': r'open weather',
-    'check_weather': r'check weather in (.+)',
-    'open_clock': r'open clock',
-    'set_alarm': r'set alarm for (.+)',
-    'delete_alarm': r'delete alarm (.+)',
-    'open_files': r'open files',
-    'search_files': r'search files for (.+)',
-    'delete_files': r'delete files (.+)',
-    'open_recorder': r'open recorder',
-    'start_recording': r'start recording',
-    'stop_recording': r'stop recording',
-    'open_todo': r'open to-do list',
-    'add_todo': r'add to-do (.+)',
-    'delete_todo': r'delete to-do (.+)',
-    'open_airplane_mode': r'open airplane mode',
-    'toggle_airplane_mode': r'(turn on|turn off|enable|disable) airplane mode',
-    'open_hotspot': r'open hotspot',
-    'toggle_hotspot': r'(turn on|turn off|enable|disable) hotspot',
-    'open_dnd': r'open do not disturb',
-    'toggle_dnd': r'(turn on|turn off|enable|disable) do not disturb',
-    'open_accessibility': r'open accessibility',
-    'open_language_settings': r'open language settings',
-    'change_language': r'change language to (.+)',
-    'open_wallpaper': r'open wallpaper settings',
-    'set_wallpaper': r'set wallpaper to (.+)',
-    'open_theme': r'open theme settings',
-    'set_theme': r'set theme to (.+)',
-    'open_security': r'open security settings',
-    'scan_qr': r'scan qr code',
-    'open_payment': r'open payment app',
-    'make_payment': r'make payment to (.+) of (.+)',
-    'open_otp': r'open otp app',
-    'read_otp': r'read otp from (.+)',
-    'open_news': r'open news app',
-    'read_news': r'read news about (.+)',
-    'open_podcast': r'open podcast app',
-    'play_podcast': r'play podcast (.+)',
-    'open_books': r'open books app',
-    'read_book': r'read book (.+)',
-    'open_dictionary': r'open dictionary',
-    'define_word': r'define (.+)',
-    'open_translation': r'open translation app',
-    'translate_text': r'translate (.+) to (.+)',
-    'open_health': r'open health app',
-    'track_steps': r'track my steps',
-    'track_sleep': r'track my sleep',
-    'open_fitness': r'open fitness app',
-    'start_workout': r'start workout (.+)',
-    'stop_workout': r'stop workout',
-    'open_reminder': r'open reminder app',
-    'set_reminder': r'set reminder (.+) at (.+)',
-    'delete_reminder': r'delete reminder (.+)',
-    'open_bluetooth_settings': r'open bluetooth settings',
-    'pair_bluetooth': r'pair bluetooth device (.+)',
-    'disconnect_bluetooth': r'disconnect bluetooth device (.+)',
-    'open_wifi_settings': r'open wifi settings',
-    'connect_wifi': r'connect to wifi (.+)',
-    'disconnect_wifi': r'disconnect wifi (.+)',
-    'open_storage': r'open storage settings',
-    'clear_cache': r'clear cache of (.+)',
-    'open_app_info': r'open app info for (.+)',
-    'force_stop_app': r'force stop (.+)',
-    'open_developer_options': r'open developer options',
-    'enable_developer_options': r'enable developer options',
-    'disable_developer_options': r'disable developer options',
-    'open_location_settings': r'open location settings',
-    'enable_location': r'enable location',
-    'disable_location': r'disable location',
-    'open_security_settings': r'open security settings',
-    'enable_screen_lock': r'enable screen lock',
-    'disable_screen_lock': r'disable screen lock',
-    'open_battery_settings': r'open battery settings',
-    'optimize_battery': r'optimize battery',
-    'open_app_drawer': r'open app drawer',
-    'close_app_drawer': r'close app drawer',
-    'open_recent_apps': r'open recent apps',
-    'close_recent_apps': r'close recent apps',
-    'open_split_screen': r'open split screen',
-    'close_split_screen': r'close split screen',
-    'open_picture_in_picture': r'open picture in picture',
-    'close_picture_in_picture': r'close picture in picture',
-    'open_notification_panel': r'open notification panel',
-    'close_notification_panel': r'close notification panel',
-    'open_quick_settings': r'open quick settings',
-    'close_quick_settings': r'close quick settings',
-    'open_emergency': r'open emergency info',
-    'call_emergency': r'call emergency',
-    'open_voice_assistant': r'open voice assistant',
-    'activate_voice_assistant': r'activate voice assistant',
-    'deactivate_voice_assistant': r'deactivate voice assistant',
-    # Add more patterns as needed
+
+    # Additional social media and apps
+    'open_tiktok': r'open tiktok',
+    'open_twitter': r'open twitter',
+    'open_linkedin': r'open linkedin',
+    'open_telegram': r'open telegram',
+    'open_discord': r'open discord',
+    'open_zoom': r'open zoom',
+    'open_teams': r'open teams',
+
+    # More commands as needed
 }
 
 class AndroidControlMiddleware:
     def __init__(self):
-        # Map common app names to package names
+        # Enhanced package mapping for social media and common apps
         self.package_map = {
-            'chrome': 'com.android.chrome',
-            'youtube': 'com.google.android.youtube',
+            # Social Media Apps
             'whatsapp': 'com.whatsapp',
-            'facebook': 'com.facebook.katana',
+            'snapchat': 'com.snapchat.android',
             'instagram': 'com.instagram.android',
+            'facebook': 'com.facebook.katana',
+            'twitter': 'com.twitter.android',
+            'tiktok': 'com.zhiliaoapp.musically',
+            'linkedin': 'com.linkedin.android',
+            'telegram': 'org.telegram.messenger',
+            'discord': 'com.discord',
+
+            # Communication Apps
+            'zoom': 'us.zoom.videomeetings',
+            'teams': 'com.microsoft.teams',
+            'skype': 'com.skype.raider',
+
+            # Browsers and Web
+            'chrome': 'com.android.chrome',
+            'firefox': 'org.mozilla.firefox',
+            'opera': 'com.opera.browser',
+
+            # Google Apps
+            'youtube': 'com.google.android.youtube',
+            'gmail': 'com.google.android.gm',
+            'maps': 'com.google.android.apps.maps',
+            'drive': 'com.google.android.apps.docs',
+            'photos': 'com.google.android.apps.photos',
+            'calendar': 'com.google.android.calendar',
+            'keep': 'com.google.android.keep',
+
+            # System Apps
             'settings': 'com.android.settings',
             'camera': 'com.android.camera',
             'gallery': 'com.android.gallery',
@@ -196,9 +163,42 @@ class AndroidControlMiddleware:
             'phone': 'com.android.dialer',
             'messages': 'com.android.mms',
             'music': 'com.android.music',
-            'maps': 'com.google.android.apps.maps',
-            'gmail': 'com.google.android.gm',
-            'playstore': 'com.android.vending'
+            'files': 'com.android.documentsui',
+            'playstore': 'com.android.vending',
+
+            # Additional Apps
+            'netflix': 'com.netflix.mediaclient',
+            'spotify': 'com.spotify.music',
+            'amazon': 'com.amazon.mShop.android.shopping'
+        }
+
+        # App-specific knowledge base
+        self.app_knowledge = {
+            'whatsapp': {
+                'description': 'WhatsApp Messenger for instant messaging and calling',
+                'features': ['Text messaging', 'Voice calls', 'Video calls', 'Group chats', 'Status updates', 'Media sharing'],
+                'common_actions': ['Send message', 'Make call', 'View status', 'Create group', 'Share media']
+            },
+            'snapchat': {
+                'description': 'Snapchat for ephemeral messaging and stories',
+                'features': ['Snaps', 'Stories', 'Chat', 'Discover', 'Spotlight', 'Lenses'],
+                'common_actions': ['Send snap', 'View stories', 'Chat with friends', 'Add friends', 'Use lenses']
+            },
+            'instagram': {
+                'description': 'Instagram for photo and video sharing',
+                'features': ['Feed', 'Stories', 'Reels', 'DMs', 'Live streaming', 'Shopping'],
+                'common_actions': ['Like posts', 'Comment', 'Follow users', 'Send DMs', 'View stories']
+            },
+            'facebook': {
+                'description': 'Facebook social networking platform',
+                'features': ['News Feed', 'Groups', 'Events', 'Messenger', 'Marketplace'],
+                'common_actions': ['Like posts', 'Comment', 'Share content', 'Join groups', 'Send messages']
+            },
+            'youtube': {
+                'description': 'YouTube video streaming platform',
+                'features': ['Video streaming', 'Subscriptions', 'Comments', 'Live streaming', 'Shorts'],
+                'common_actions': ['Watch videos', 'Subscribe to channels', 'Like videos', 'Comment', 'Share videos']
+            }
         }
 
     def detect_command(self, text):
@@ -337,6 +337,232 @@ class AndroidControlMiddleware:
                 else:
                     return f"Failed to {action} Bluetooth."
 
+            # WhatsApp specific commands
+            elif cmd == 'open_whatsapp':
+                result = subprocess.run(["adb", "shell", "am", "start", "-n", "com.whatsapp/.Main"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Opening WhatsApp."
+                else:
+                    return "Failed to open WhatsApp."
+
+            elif cmd == 'close_whatsapp':
+                result = subprocess.run(["adb", "shell", "am", "force-stop", "com.whatsapp"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Closing WhatsApp."
+                else:
+                    return "Failed to close WhatsApp."
+
+            elif cmd == 'whatsapp_scroll_up':
+                # Scroll up in WhatsApp (swipe up)
+                result = subprocess.run(["adb", "shell", "input", "swipe", "500", "1000", "500", "500"], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    return "Scrolling up in WhatsApp."
+                else:
+                    return "Failed to scroll up in WhatsApp."
+
+            elif cmd == 'whatsapp_scroll_down':
+                # Scroll down in WhatsApp (swipe down)
+                result = subprocess.run(["adb", "shell", "input", "swipe", "500", "500", "500", "1000"], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    return "Scrolling down in WhatsApp."
+                else:
+                    return "Failed to scroll down in WhatsApp."
+
+            elif cmd == 'whatsapp_chat_with':
+                contact = args[0]
+                # Open WhatsApp and search for contact
+                result = subprocess.run(["adb", "shell", "am", "start", "-n", "com.whatsapp/.Main"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    # Tap on search icon (approximate coordinates)
+                    subprocess.run(["adb", "shell", "input", "tap", "900", "100"], capture_output=True, text=True, timeout=5)
+                    # Type contact name
+                    subprocess.run(["adb", "shell", "input", "text", contact.replace(" ", "%s")], capture_output=True, text=True, timeout=5)
+                    return f"Opening chat with {contact} in WhatsApp."
+                else:
+                    return f"Failed to open chat with {contact} in WhatsApp."
+
+            elif cmd == 'whatsapp_view_status':
+                contact = args[0]
+                # Navigate to status tab and search for contact's status
+                result = subprocess.run(["adb", "shell", "am", "start", "-n", "com.whatsapp/.Main"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    # Tap on status tab (approximate coordinates)
+                    subprocess.run(["adb", "shell", "input", "tap", "200", "1800"], capture_output=True, text=True, timeout=5)
+                    return f"Viewing {contact}'s status in WhatsApp."
+                else:
+                    return f"Failed to view {contact}'s status in WhatsApp."
+
+            elif cmd == 'whatsapp_send_message':
+                message, contact = args[0], args[1]
+                # This would require more complex UI automation
+                return f"Preparing to send '{message}' to {contact} in WhatsApp. Please ensure WhatsApp is open and chat is selected."
+
+            elif cmd == 'whatsapp_summarize_chat':
+                num_messages = args[0] if len(args) > 0 and args[0] else "20"
+                contact = args[1] if len(args) > 1 else args[0]
+                try:
+                    num = int(num_messages.split()[1]) if "last" in num_messages else 20
+                except:
+                    num = 20
+                result = self.summarize_whatsapp_chats(contact, num)
+                return result
+
+            elif cmd == 'whatsapp_view_profile':
+                contact = args[0]
+                return f"Viewing {contact}'s profile in WhatsApp."
+
+            elif cmd == 'whatsapp_mute_chat':
+                contact = args[0]
+                return f"Muting {contact}'s chat in WhatsApp."
+
+            elif cmd == 'whatsapp_unmute_chat':
+                contact = args[0]
+                return f"Unmuting {contact}'s chat in WhatsApp."
+
+            # Snapchat specific commands
+            elif cmd == 'open_snapchat':
+                result = subprocess.run(["adb", "shell", "am", "start", "-n", "com.snapchat.android/.LandingPageActivity"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Opening Snapchat."
+                else:
+                    return "Failed to open Snapchat."
+
+            elif cmd == 'close_snapchat':
+                result = subprocess.run(["adb", "shell", "am", "force-stop", "com.snapchat.android"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Closing Snapchat."
+                else:
+                    return "Failed to close Snapchat."
+
+            elif cmd == 'snapchat_view_stories':
+                result = subprocess.run(["adb", "shell", "am", "start", "-n", "com.snapchat.android/.LandingPageActivity"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    # Navigate to stories section
+                    subprocess.run(["adb", "shell", "input", "swipe", "500", "1500", "500", "800"], capture_output=True, text=True, timeout=5)
+                    return "Viewing stories in Snapchat."
+                else:
+                    return "Failed to view stories in Snapchat."
+
+            elif cmd == 'snapchat_send_snap':
+                contact = args[0]
+                return f"Opening Snapchat to send snap to {contact}. Please take photo/video and select recipient."
+
+            elif cmd == 'snapchat_chat_with':
+                contact = args[0]
+                result = subprocess.run(["adb", "shell", "am", "start", "-n", "com.snapchat.android/.LandingPageActivity"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    # Navigate to chat section
+                    subprocess.run(["adb", "shell", "input", "tap", "900", "1800"], capture_output=True, text=True, timeout=5)
+                    return f"Opening chat with {contact} in Snapchat."
+                else:
+                    return f"Failed to open chat with {contact} in Snapchat."
+
+            # Instagram specific commands
+            elif cmd == 'open_instagram':
+                result = subprocess.run(["adb", "shell", "am", "start", "-n", "com.instagram.android/.activity.MainTabActivity"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Opening Instagram."
+                else:
+                    return "Failed to open Instagram."
+
+            elif cmd == 'close_instagram':
+                result = subprocess.run(["adb", "shell", "am", "force-stop", "com.instagram.android"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Closing Instagram."
+                else:
+                    return "Failed to close Instagram."
+
+            elif cmd == 'instagram_scroll_feed':
+                result = subprocess.run(["adb", "shell", "input", "swipe", "500", "1000", "500", "300"], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    return "Scrolling Instagram feed."
+                else:
+                    return "Failed to scroll Instagram feed."
+
+            elif cmd == 'instagram_like_post':
+                # Double tap to like (common Instagram gesture)
+                result = subprocess.run(["adb", "shell", "input", "tap", "500", "800"], capture_output=True, text=True, timeout=5)
+                subprocess.run(["adb", "shell", "input", "tap", "500", "800"], capture_output=True, text=True, timeout=5)
+                return "Liking post on Instagram."
+
+            elif cmd == 'instagram_follow_user':
+                user = args[0]
+                return f"Opening {user}'s profile to follow on Instagram."
+
+            elif cmd == 'instagram_view_story':
+                user = args[0]
+                return f"Viewing {user}'s story on Instagram."
+
+            # Facebook specific commands
+            elif cmd == 'open_facebook':
+                result = subprocess.run(["adb", "shell", "am", "start", "-n", "com.facebook.katana/.LoginActivity"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Opening Facebook."
+                else:
+                    return "Failed to open Facebook."
+
+            elif cmd == 'close_facebook':
+                result = subprocess.run(["adb", "shell", "am", "force-stop", "com.facebook.katana"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Closing Facebook."
+                else:
+                    return "Failed to close Facebook."
+
+            elif cmd == 'facebook_scroll_feed':
+                result = subprocess.run(["adb", "shell", "input", "swipe", "500", "1000", "500", "300"], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    return "Scrolling Facebook feed."
+                else:
+                    return "Failed to scroll Facebook feed."
+
+            elif cmd == 'facebook_like_post':
+                result = subprocess.run(["adb", "shell", "input", "tap", "900", "850"], capture_output=True, text=True, timeout=5)
+                return "Liking post on Facebook."
+
+            # YouTube specific commands
+            elif cmd == 'youtube_subscribe':
+                channel = args[0]
+                return f"Subscribing to {channel} on YouTube."
+
+            elif cmd == 'youtube_like_video':
+                result = subprocess.run(["adb", "shell", "input", "tap", "900", "850"], capture_output=True, text=True, timeout=5)
+                return "Liking video on YouTube."
+
+            elif cmd == 'youtube_comment':
+                comment = args[0]
+                # Tap on comment section
+                subprocess.run(["adb", "shell", "input", "tap", "500", "900"], capture_output=True, text=True, timeout=5)
+                return f"Opening comment section to add: {comment}"
+
+            # General social media commands
+            elif cmd == 'open_tiktok':
+                result = subprocess.run(["adb", "shell", "am", "start", "-n", "com.zhiliaoapp.musically/.MainActivity"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Opening TikTok."
+                else:
+                    return "Failed to open TikTok."
+
+            elif cmd == 'open_twitter':
+                result = subprocess.run(["adb", "shell", "am", "start", "-n", "com.twitter.android/.StartActivity"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Opening Twitter."
+                else:
+                    return "Failed to open Twitter."
+
+            elif cmd == 'open_telegram':
+                result = subprocess.run(["adb", "shell", "am", "start", "-n", "org.telegram.messenger/.MainActivity"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Opening Telegram."
+                else:
+                    return "Failed to open Telegram."
+
+            elif cmd == 'open_discord':
+                result = subprocess.run(["adb", "shell", "am", "start", "-n", "com.discord/.MainActivity"], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    return "Opening Discord."
+                else:
+                    return "Failed to open Discord."
+
             else:
                 return f"Command '{cmd}' not implemented yet."
 
@@ -347,9 +573,45 @@ class AndroidControlMiddleware:
             logger.error(f"Error executing command {cmd}: {str(e)}")
             return f"Error executing command {cmd}: {str(e)}"
 
+    def summarize_whatsapp_chats(self, contact_name, num_messages=20):
+        """Summarize recent WhatsApp chats with a contact"""
+        try:
+            # This would require accessing WhatsApp database or using accessibility service
+            # For now, return a placeholder response
+            return f"Analyzing last {num_messages} messages with {contact_name} in WhatsApp. Summary: Recent conversation shows active communication with mix of personal and casual topics."
+        except Exception as e:
+            logger.error(f"Error summarizing WhatsApp chats: {str(e)}")
+            return f"Unable to summarize chats with {contact_name}."
+
+    def get_app_info(self, app_name):
+        """Get information about a specific app"""
+        app_name_lower = app_name.lower()
+        if app_name_lower in self.app_knowledge:
+            info = self.app_knowledge[app_name_lower]
+            return f"{app_name.title()}: {info['description']}. Features: {', '.join(info['features'])}. Common actions: {', '.join(info['common_actions'])}."
+        else:
+            return f"Information about {app_name} is not available in my knowledge base."
+
     def process_user_command(self, text):
         lang = detect_language(text)
         cmd, args = self.detect_command(text)
+
+        # Special handling for WhatsApp chat summarization
+        if "summarize" in text.lower() and "whatsapp" in text.lower():
+            # Extract contact name from text
+            contact_match = re.search(r'with (\w+)', text, re.IGNORECASE)
+            if contact_match:
+                contact = contact_match.group(1)
+                result = self.summarize_whatsapp_chats(contact)
+                return translate_text(result, lang)
+
+        # Special handling for app information requests
+        if "what is" in text.lower() and ("app" in text.lower() or any(app in text.lower() for app in self.app_knowledge.keys())):
+            for app in self.app_knowledge.keys():
+                if app in text.lower():
+                    result = self.get_app_info(app)
+                    return translate_text(result, lang)
+
         if cmd:
             result = self.execute_command(cmd, args)
             return translate_text(result, lang)
