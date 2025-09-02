@@ -26,7 +26,68 @@ Before you start, **make sure to follow this tutorial to set up the voice agent 
 4. In the .ENV - File you should paste your API-Keys and your LiveKit Secret, LiveKit URL.
    If you want to use the Send Email Tool also specify your Gmail Account and App Password.
 5. Make sure that your LiveKit Account is set-up correctly.
-6. For Android device control: Ensure ADB is installed and your Android device is connected with USB debugging enabled.
+6. **For Android device control (CRITICAL for deployment):**
+   - Ensure ADB (Android Debug Bridge) is installed on your system
+   - Your Android device must be connected via USB with USB debugging enabled
+   - Authorize the computer on your Android device when prompted
+   - For cloud deployment, ensure the server has ADB access to connected Android devices
+   - Test ADB connection: `adb devices` should show your device as "device" (not "unauthorized")
+
+### 🔧 Android Device Setup Requirements
+
+**For Local Development:**
+```bash
+# Install ADB
+sudo apt-get install android-tools-adb  # Linux
+# or download from https://developer.android.com/studio/releases/platform-tools
+
+# Enable USB Debugging on Android device:
+# 1. Go to Settings > Developer Options
+# 2. Enable "USB Debugging"
+# 3. Connect device via USB
+# 4. Authorize computer when prompted
+
+# Verify connection
+adb devices  # Should show device as "device"
+```
+
+**For Cloud Deployment:**
+- Use USB over IP or network ADB for remote Android device access
+- Ensure proper USB permissions and device authorization
+- Test all Android functions before deploying to production
+- Monitor ADB connection status in application logs
+
+### 📱 Supported Android Functions
+
+**WhatsApp Controls:**
+- Open/close WhatsApp
+- Scroll up/down in chats
+- Open specific chats with contacts
+- View contact status updates
+- Send messages (with UI automation)
+- Summarize chat conversations
+- Mute/unmute chat notifications
+
+**Social Media Controls:**
+- Instagram: Like posts, follow users, view stories, scroll feed
+- Facebook: Like posts, comment, share, scroll feed
+- Snapchat: View stories, send snaps, chat with friends
+- YouTube: Search, play, like, comment, subscribe
+- TikTok, Twitter, LinkedIn, Telegram, Discord
+
+**Device Controls:**
+- Volume control (up/down/mute)
+- Brightness adjustment
+- WiFi and Bluetooth toggle
+- Screenshot capture
+- Device lock/unlock
+- Camera operations
+
+**System Health Monitoring:**
+- ADB connection status
+- Device authorization check
+- App installation verification
+- Screen size and density detection
 
 ---
 

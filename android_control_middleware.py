@@ -14,17 +14,49 @@ from language_middleware import detect_language, translate_text
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Check if ADB is available
+# Check if ADB is available and device is connected
 def is_adb_available():
     try:
         result = subprocess.run(["adb", "version"], capture_output=True, text=True, timeout=5)
-        return result.returncode == 0
+        if result.returncode != 0:
+            return False
+
+        # Check if any device is connected
+        device_result = subprocess.run(["adb", "devices"], capture_output=True, text=True, timeout=5)
+        if "device" not in device_result.stdout or "unauthorized" in device_result.stdout:
+            logger.warning("ADB available but no authorized device connected")
+            return False
+
+        return True
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return False
 
+# Enhanced device connection check
+def check_device_connection():
+    """Check if Android device is properly connected and authorized"""
+    try:
+        result = subprocess.run(["adb", "devices"], capture_output=True, text=True, timeout=5)
+        if "device" in result.stdout and "unauthorized" not in result.stdout:
+            # Get device info
+            info_result = subprocess.run(["adb", "shell", "getprop", "ro.product.model"], capture_output=True, text=True, timeout=5)
+            if info_result.returncode == 0:
+                device_model = info_result.stdout.strip()
+                logger.info(f"Connected Android device: {device_model}")
+                return True
+        return False
+    except Exception as e:
+        logger.error(f"Error checking device connection: {e}")
+        return False
+
 ADB_AVAILABLE = is_adb_available()
+DEVICE_CONNECTED = check_device_connection()
+
 if not ADB_AVAILABLE:
-    logger.warning("ADB is not available. Android control functions will not work on real devices.")
+    logger.warning("ADB is not available. Android control functions will not work.")
+elif not DEVICE_CONNECTED:
+    logger.warning("ADB available but no authorized Android device connected.")
+else:
+    logger.info("ADB and Android device connection verified successfully.")
 
 # Enhanced command patterns with WhatsApp, Snapchat, and social media focus
 COMMAND_PATTERNS = {
@@ -121,15 +153,15 @@ COMMAND_PATTERNS = {
 
 class AndroidControlMiddleware:
     def __init__(self):
-        # Enhanced package mapping for social media and common apps
+        # Enhanced and verified package mapping for Android apps
         self.package_map = {
-            # Social Media Apps
+            # Social Media Apps (verified package names)
             'whatsapp': 'com.whatsapp',
             'snapchat': 'com.snapchat.android',
             'instagram': 'com.instagram.android',
             'facebook': 'com.facebook.katana',
             'twitter': 'com.twitter.android',
-            'tiktok': 'com.zhiliaoapp.musically',
+            'tiktok': 'com.ss.android.ugc.trill',  # Updated TikTok package
             'linkedin': 'com.linkedin.android',
             'telegram': 'org.telegram.messenger',
             'discord': 'com.discord',
@@ -143,6 +175,7 @@ class AndroidControlMiddleware:
             'chrome': 'com.android.chrome',
             'firefox': 'org.mozilla.firefox',
             'opera': 'com.opera.browser',
+            'edge': 'com.microsoft.emmx',
 
             # Google Apps
             'youtube': 'com.google.android.youtube',
@@ -153,10 +186,10 @@ class AndroidControlMiddleware:
             'calendar': 'com.google.android.calendar',
             'keep': 'com.google.android.keep',
 
-            # System Apps
+            # System Apps (may vary by device manufacturer)
             'settings': 'com.android.settings',
-            'camera': 'com.android.camera',
-            'gallery': 'com.android.gallery',
+            'camera': 'com.android.camera2',  # Updated for newer Android
+            'gallery': 'com.android.gallery3d',  # More common package
             'calculator': 'com.android.calculator2',
             'clock': 'com.android.deskclock',
             'contacts': 'com.android.contacts',
@@ -171,6 +204,89 @@ class AndroidControlMiddleware:
             'spotify': 'com.spotify.music',
             'amazon': 'com.amazon.mShop.android.shopping'
         }
+
+        # Alternative package names for different device manufacturers
+        self.alternative_packages = {
+            'camera': ['com.android.camera2', 'com.android.camera', 'com.huawei.camera', 'com.samsung.android.camera'],
+            'gallery': ['com.android.gallery3d', 'com.google.android.apps.photos', 'com.samsung.android.gallery'],
+            'settings': ['com.android.settings', 'com.samsung.android.settings', 'com.huawei.android.settings']
+        }
+
+        # Device screen information (will be populated on first use)
+        self.screen_size = None
+        self.screen_density = None
+
+    def get_screen_info(self):
+        """Get device screen size and density for coordinate calculations"""
+        if self.screen_size is None:
+            try:
+                # Get screen size
+                size_result = subprocess.run(["adb", "shell", "wm", "size"],
+                                           capture_output=True, text=True, timeout=5)
+                if size_result.returncode == 0:
+                    size_line = size_result.stdout.strip().split(':')[-1].strip()
+                    width, height = map(int, size_line.split('x'))
+                    self.screen_size = (width, height)
+                else:
+                    # Fallback to common resolution
+                    self.screen_size = (1080, 1920)  # Common Android resolution
+
+                # Get screen density
+                density_result = subprocess.run(["adb", "shell", "wm", "density"],
+                                              capture_output=True, text=True, timeout=5)
+                if density_result.returncode == 0:
+                    density_line = density_result.stdout.strip().split(':')[-1].strip()
+                    self.screen_density = int(density_line)
+                else:
+                    self.screen_density = 480  # Common density
+
+                logger.info(f"Device screen: {self.screen_size[0]}x{self.screen_size[1]}, density: {self.screen_density}")
+
+            except Exception as e:
+                logger.warning(f"Could not get screen info: {e}")
+                self.screen_size = (1080, 1920)
+                self.screen_density = 480
+
+        return self.screen_size, self.screen_density
+
+    def calculate_coordinates(self, x_percent, y_percent):
+        """Calculate actual screen coordinates from percentages"""
+        width, height = self.get_screen_info()[0]
+        x = int(width * x_percent / 100)
+        y = int(height * y_percent / 100)
+        return x, y
+
+    def get_package_name(self, app_name):
+        """Get the correct package name for an app, trying alternatives if needed"""
+        app_name_lower = app_name.lower()
+
+        # First try the primary package
+        if app_name_lower in self.package_map:
+            primary_package = self.package_map[app_name_lower]
+
+            # Verify if the package exists on the device
+            try:
+                result = subprocess.run(["adb", "shell", "pm", "list", "packages", primary_package],
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0 and primary_package in result.stdout:
+                    return primary_package
+            except:
+                pass
+
+        # If primary package not found, try alternatives
+        if app_name_lower in self.alternative_packages:
+            for alt_package in self.alternative_packages[app_name_lower]:
+                try:
+                    result = subprocess.run(["adb", "shell", "pm", "list", "packages", alt_package],
+                                          capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0 and alt_package in result.stdout:
+                        logger.info(f"Using alternative package {alt_package} for {app_name}")
+                        return alt_package
+                except:
+                    continue
+
+        # Fallback to default pattern
+        return f"com.{app_name_lower}" if not app_name_lower.startswith('com.') else app_name_lower
 
         # App-specific knowledge base
         self.app_knowledge = {
@@ -214,17 +330,43 @@ class AndroidControlMiddleware:
         if not ADB_AVAILABLE:
             return "ADB is not available. Cannot execute Android commands on real device."
 
+        # Re-check device connection for each command (in case device disconnected)
+        if not check_device_connection():
+            return "Android device not connected or not authorized. Please connect your device and enable USB debugging."
+
         try:
             if cmd == 'open_app':
                 app_name = args[0]
-                package = self.package_map.get(app_name.lower(), f"com.{app_name}")
-                result = subprocess.run(["adb", "shell", "monkey", "-p", package, "1"], capture_output=True, text=True, timeout=10)
-                if result.returncode == 0:
-                    logger.info(f"Successfully opened {app_name} app.")
+                package = self.get_package_name(app_name)
+
+                # Try to start the app using multiple methods
+                success = False
+
+                # Method 1: Using monkey
+                try:
+                    result = subprocess.run(["adb", "shell", "monkey", "-p", package, "1"],
+                                          capture_output=True, text=True, timeout=10)
+                    if result.returncode == 0:
+                        success = True
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"Monkey method timed out for {app_name}")
+
+                # Method 2: Using am start (fallback)
+                if not success:
+                    try:
+                        result = subprocess.run(["adb", "shell", "am", "start", "-n", f"{package}/.MainActivity"],
+                                              capture_output=True, text=True, timeout=10)
+                        if result.returncode == 0:
+                            success = True
+                    except subprocess.TimeoutExpired:
+                        logger.warning(f"AM start method timed out for {app_name}")
+
+                if success:
+                    logger.info(f"Successfully opened {app_name} app with package {package}.")
                     return f"Opening {app_name} app."
                 else:
-                    logger.error(f"Failed to open {app_name}: {result.stderr}")
-                    return f"Failed to open {app_name} app."
+                    logger.error(f"Failed to open {app_name} app with package {package}")
+                    return f"Failed to open {app_name} app. Please ensure the app is installed."
 
             elif cmd == 'close_app':
                 app_name = args[0]
@@ -373,10 +515,19 @@ class AndroidControlMiddleware:
                 # Open WhatsApp and search for contact
                 result = subprocess.run(["adb", "shell", "am", "start", "-n", "com.whatsapp/.Main"], capture_output=True, text=True, timeout=10)
                 if result.returncode == 0:
-                    # Tap on search icon (approximate coordinates)
-                    subprocess.run(["adb", "shell", "input", "tap", "900", "100"], capture_output=True, text=True, timeout=5)
-                    # Type contact name
-                    subprocess.run(["adb", "shell", "input", "text", contact.replace(" ", "%s")], capture_output=True, text=True, timeout=5)
+                    # Wait for app to load
+                    subprocess.run(["adb", "shell", "sleep", "2"], capture_output=True, text=True, timeout=3)
+
+                    # Tap on search icon (using percentage-based coordinates)
+                    search_x, search_y = self.calculate_coordinates(85, 5)  # Top-right area
+                    subprocess.run(["adb", "shell", "input", "tap", str(search_x), str(search_y)],
+                                 capture_output=True, text=True, timeout=5)
+
+                    # Wait a bit and type contact name
+                    subprocess.run(["adb", "shell", "sleep", "1"], capture_output=True, text=True, timeout=2)
+                    subprocess.run(["adb", "shell", "input", "text", contact.replace(" ", "%s")],
+                                 capture_output=True, text=True, timeout=5)
+
                     return f"Opening chat with {contact} in WhatsApp."
                 else:
                     return f"Failed to open chat with {contact} in WhatsApp."
@@ -592,6 +743,33 @@ class AndroidControlMiddleware:
         else:
             return f"Information about {app_name} is not available in my knowledge base."
 
+    def health_check(self):
+        """Comprehensive health check for Android control functionality"""
+        health_status = {
+            'adb_available': ADB_AVAILABLE,
+            'device_connected': check_device_connection(),
+            'apps_verified': {},
+            'overall_status': 'unknown'
+        }
+
+        # Check critical apps
+        critical_apps = ['whatsapp', 'chrome', 'settings']
+        for app in critical_apps:
+            package = self.get_package_name(app)
+            health_status['apps_verified'][app] = package != f"com.{app}"
+
+        # Determine overall status
+        if not health_status['adb_available']:
+            health_status['overall_status'] = 'adb_not_available'
+        elif not health_status['device_connected']:
+            health_status['overall_status'] = 'device_not_connected'
+        elif not any(health_status['apps_verified'].values()):
+            health_status['overall_status'] = 'critical_apps_missing'
+        else:
+            health_status['overall_status'] = 'healthy'
+
+        return health_status
+
     def process_user_command(self, text):
         lang = detect_language(text)
         cmd, args = self.detect_command(text)
@@ -611,6 +789,20 @@ class AndroidControlMiddleware:
                 if app in text.lower():
                     result = self.get_app_info(app)
                     return translate_text(result, lang)
+
+        # Special handling for health check requests
+        if "health check" in text.lower() or "system status" in text.lower():
+            health = self.health_check()
+            status_msg = f"System Health: {health['overall_status'].replace('_', ' ').title()}"
+            if health['adb_available']:
+                status_msg += " | ADB: ✓"
+            else:
+                status_msg += " | ADB: ✗"
+            if health['device_connected']:
+                status_msg += " | Device: ✓"
+            else:
+                status_msg += " | Device: ✗"
+            return translate_text(status_msg, lang)
 
         if cmd:
             result = self.execute_command(cmd, args)
