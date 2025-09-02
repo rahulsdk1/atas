@@ -3,6 +3,9 @@
 Middleware to ensure agent's TTS (voice output) always matches the accurate reply text (e.g., from web search).
 No changes required to original code. Import and use hooks as needed.
 """
+import logging
+
+logger = logging.getLogger(__name__)
 
 class TTSSyncMiddleware:
     def __init__(self):
@@ -37,9 +40,23 @@ class StrictTTSSyncMiddleware:
 
     def get_strict_tts_text(self, reply_text, web_result=None, persona='female', tts_lang='en'):
         # Use web_result if present, else reply_text
-        tts_text = web_result if web_result else reply_text
-        # Translate TTS text to correct language
-        tts_text = translate_text(tts_text, tts_lang)
+        if web_result and isinstance(web_result, str) and web_result.strip():
+            # For web search results, be more careful with translation
+            # Only translate if the language is different and it's not already in the target language
+            if tts_lang != 'en' and len(web_result.split()) > 10:  # Only translate longer results
+                try:
+                    tts_text = translate_text(web_result, tts_lang)
+                except Exception as e:
+                    logger.warning(f"Translation failed for web result: {e}")
+                    tts_text = web_result  # Fallback to original
+            else:
+                tts_text = web_result  # Keep original for English or short results
+        else:
+            tts_text = reply_text
+            # Translate reply text normally
+            if tts_lang != 'en':
+                tts_text = translate_text(tts_text, tts_lang)
+
         # Ensure female persona
         if persona == 'female' and 'female' not in tts_text.lower():
             tts_text = f"(female persona) {tts_text}"

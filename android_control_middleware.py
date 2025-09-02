@@ -63,6 +63,14 @@ def get_android_device_info():
         'architecture': 'unknown'
     }
 
+    # Check if ADB is available first
+    if not is_adb_available():
+        logger.warning("ADB is not available. Cannot get device information.")
+        device_info['adb_available'] = False
+        return device_info
+
+    device_info['adb_available'] = True
+
     try:
         # Get device manufacturer
         manufacturer_result = subprocess.run(["adb", "shell", "getprop", "ro.product.manufacturer"],
@@ -145,6 +153,13 @@ def get_android_device_info():
 
         return device_info
 
+    except FileNotFoundError:
+        logger.error("ADB executable not found. Please install Android SDK Platform Tools.")
+        device_info['adb_available'] = False
+        return device_info
+    except subprocess.TimeoutExpired:
+        logger.error("ADB command timed out. Device may not be responding.")
+        return device_info
     except Exception as e:
         logger.error(f"Error getting device info: {e}")
         return device_info
@@ -179,7 +194,7 @@ COMMAND_PATTERNS = {
     'whatsapp_create_group': r'create group (.+) in whatsapp',
     'whatsapp_add_to_group': r'add (.+) to group in whatsapp',
     'whatsapp_summarize_chat': r'summarize (last \d+ )?messages? with (.+) in whatsapp',
-    'whatsapp_view_profile': r'view (.+) profile in whatsapp',
+    # Removed duplicate pattern - already defined above
     'whatsapp_mute_chat': r'mute (.+) chat in whatsapp',
     'whatsapp_unmute_chat': r'unmute (.+) chat in whatsapp',
 
@@ -222,6 +237,11 @@ COMMAND_PATTERNS = {
     # Device and system controls
     'set_volume': r'(up|down|low|raise|mute|max|increase|decrease) (the )?volume',
     'set_brightness': r'(set|turn|low|raise|increase|decrease) brightness( to)? (\d+)%',
+    'control_flashlight': r'(turn on|turn off|enable|disable|switch on|switch off) (flashlight|torch|light)',
+    'make_call': r'(call|dial|phone) (.+)',
+    'answer_call': r'(answer|accept|pick up|receive) (the )?call',
+    'reject_call': r'(reject|decline|hang up|end) (the )?call',
+    'check_call_status': r'(check|what|who) (is )?calling|incoming call|call status',
     'toggle_wifi': r'(turn on|turn off|enable|disable) wifi',
     'toggle_bluetooth': r'(turn on|turn off|enable|disable) bluetooth',
     'take_screenshot': r'(take|capture) (a )?screenshot',
@@ -257,6 +277,7 @@ class AndroidControlMiddleware:
         # Universal Android device compatibility system
         self.device_info = get_android_device_info()
         self.manufacturer = self.device_info['manufacturer']
+        self.adb_available = self.device_info.get('adb_available', True)
         self.api_level = self.device_info['api_level']
         self.device_type = self.device_info['device_type']
 
@@ -393,6 +414,10 @@ class AndroidControlMiddleware:
                 'status_offset': (0.25, 0.2)
             }
         }
+
+        # Contact lookup cache
+        self.contact_cache = {}
+        self.contact_cache_timestamp = 0
 
         # Device screen information (will be populated on first use)
         self.screen_size = None
@@ -538,6 +563,8 @@ class AndroidControlMiddleware:
 
     def execute_command(self, cmd, args):
         """Executes the detected command using ADB."""
+        if not self.adb_available:
+            return "ADB is not available. Cannot execute Android commands on real device. Please install Android SDK Platform Tools and connect an Android device."
         if not ADB_AVAILABLE:
             return "ADB is not available. Cannot execute Android commands on real device."
 
@@ -588,7 +615,7 @@ class AndroidControlMiddleware:
 
             elif cmd == 'close_app':
                 app_name = args[0]
-                package = self.package_map.get(app_name.lower(), f"com.{app_name}")
+                package = self.get_package_name(app_name)
                 result = subprocess.run(["adb", "shell", "am", "force-stop", package], capture_output=True, text=True, timeout=10)
                 if result.returncode == 0:
                     logger.info(f"Successfully closed {app_name} app.")
@@ -716,11 +743,187 @@ class AndroidControlMiddleware:
                     except Exception as e:
                         logger.debug(f"Manufacturer-specific brightness method failed: {e}")
 
+                # Method 5: Try using input key events for brightness (works on some devices)
+                if not success:
+                    try:
+                        # Brightness up key events (multiple presses for desired level)
+                        brightness_level = min(int(level) // 25, 4)  # Max 4 presses
+                        for _ in range(brightness_level):
+                            result = subprocess.run(["adb", "shell", "input", "keyevent", "221"],  # Brightness up
+                                                  capture_output=True, text=True, timeout=2)
+                        success = True
+                        logger.info(f"Brightness adjusted using key events to approximately {level}%")
+                    except Exception as e:
+                        logger.debug(f"Key event brightness method failed: {e}")
+
                 if success:
                     return f"Setting brightness to {level}%."
                 else:
                     logger.warning(f"All brightness control methods failed for {self.manufacturer} device")
                     return f"Failed to set brightness to {level}%. This may require system permissions or device-specific settings."
+
+            elif cmd == 'control_flashlight':
+                action = args[0]
+
+                # Flashlight control using camera API
+                success = False
+
+                # Method 1: Using camera flashlight toggle
+                try:
+                    if action in ['turn on', 'enable', 'switch on']:
+                        # Enable flashlight
+                        result = subprocess.run(["adb", "shell", "am", "broadcast", "-a", "com.android.intent.action.FLASHLIGHT", "--ez", "enable", "true"],
+                                              capture_output=True, text=True, timeout=10)
+                        if result.returncode != 0:
+                            # Alternative method using camera service
+                            result = subprocess.run(["adb", "shell", "service", "call", "camera", "16", "i32", "1"],
+                                                  capture_output=True, text=True, timeout=10)
+                    else:
+                        # Disable flashlight
+                        result = subprocess.run(["adb", "shell", "am", "broadcast", "-a", "com.android.intent.action.FLASHLIGHT", "--ez", "enable", "false"],
+                                              capture_output=True, text=True, timeout=10)
+                        if result.returncode != 0:
+                            # Alternative method using camera service
+                            result = subprocess.run(["adb", "shell", "service", "call", "camera", "16", "i32", "0"],
+                                                  capture_output=True, text=True, timeout=10)
+
+                    if result.returncode == 0:
+                        success = True
+                        logger.info(f"Flashlight {action} successful")
+
+                except Exception as e:
+                    logger.debug(f"Flashlight control failed: {e}")
+
+                # Method 2: Try using torch mode (for newer Android versions)
+                if not success:
+                    try:
+                        if action in ['turn on', 'enable', 'switch on']:
+                            result = subprocess.run(["adb", "shell", "settings", "put", "system", "torch_state", "1"],
+                                                  capture_output=True, text=True, timeout=10)
+                        else:
+                            result = subprocess.run(["adb", "shell", "settings", "put", "system", "torch_state", "0"],
+                                                  capture_output=True, text=True, timeout=10)
+
+                        if result.returncode == 0:
+                            success = True
+                            logger.info(f"Flashlight {action} using torch mode")
+                    except Exception as e:
+                        logger.debug(f"Torch mode flashlight control failed: {e}")
+
+                if success:
+                    return f"Flashlight {action}."
+                else:
+                    return f"Failed to {action} flashlight. This may require camera permissions or device-specific settings."
+
+            elif cmd == 'check_call_status':
+                # Check for incoming call status
+                try:
+                    # Method 1: Check call state using dumpsys
+                    result = subprocess.run(["adb", "shell", "dumpsys", "telephony.registry", "|", "grep", "mCallState"],
+                                          capture_output=True, text=True, timeout=5)
+
+                    if result.returncode == 0 and "RINGING" in result.stdout.upper():
+                        caller_info = self.get_caller_info()
+                        return f"{caller_info} Would you like me to answer or reject this call?"
+
+                    # Method 2: Alternative check using service call
+                    result = subprocess.run(["adb", "shell", "service", "call", "phone", "1"],
+                                          capture_output=True, text=True, timeout=5)
+
+                    if result.returncode == 0 and result.stdout.strip():
+                        return f"Incoming call detected. {result.stdout.strip()} Would you like me to answer or reject this call?"
+
+                    return "No incoming call detected."
+
+                except Exception as e:
+                    logger.debug(f"Error checking call status: {e}")
+                    return "Unable to check call status at this time."
+
+            elif cmd == 'make_call':
+                contact = args[0]
+
+                # Try to make a phone call
+                success = False
+                phone_number = None
+
+                # Clean the contact info
+                contact_clean = contact.strip()
+
+                # Check if it's already a phone number
+                if contact_clean.replace(" ", "").replace("-", "").replace("+", "").replace("(", "").replace(")", "").isdigit():
+                    phone_number = contact_clean.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+                else:
+                    # Try to lookup contact by name
+                    phone_number = self.lookup_contact(contact_clean)
+                    if phone_number:
+                        logger.info(f"Found contact {contact_clean}: {phone_number}")
+                    else:
+                        return f"I couldn't find '{contact}' in your contacts. Please provide the phone number you want to call."
+
+                # Format the number properly
+                if phone_number:
+                    if not phone_number.startswith('+'):
+                        # Assume local number, add country code if needed
+                        if len(phone_number) == 10:  # Indian mobile number
+                            phone_number = "+91" + phone_number
+
+                    try:
+                        result = subprocess.run(["adb", "shell", "am", "start", "-a", "android.intent.action.CALL", "-d", f"tel:{phone_number}"],
+                                              capture_output=True, text=True, timeout=10)
+
+                        if result.returncode == 0:
+                            success = True
+                            logger.info(f"Calling {phone_number}")
+                        else:
+                            logger.error(f"Call failed: {result.stderr}")
+
+                    except Exception as e:
+                        logger.error(f"Error making call: {e}")
+
+                if success:
+                    return f"Calling {contact} ({phone_number})..."
+                else:
+                    return f"Failed to call {contact}. Please check the phone number and try again."
+
+            elif cmd == 'answer_call':
+                # Answer incoming call
+                try:
+                    # Method 1: Using input keyevent (works on most devices)
+                    result = subprocess.run(["adb", "shell", "input", "keyevent", "5"],  # KEYCODE_CALL
+                                          capture_output=True, text=True, timeout=5)
+
+                    if result.returncode != 0:
+                        # Method 2: Using telephony service (for some devices)
+                        result = subprocess.run(["adb", "shell", "service", "call", "phone", "1", "s16", "answer"],
+                                              capture_output=True, text=True, timeout=5)
+
+                    if result.returncode == 0:
+                        return "Call answered."
+                    else:
+                        return "Failed to answer call."
+                except Exception as e:
+                    logger.error(f"Error answering call: {e}")
+                    return "Failed to answer call."
+
+            elif cmd == 'reject_call':
+                # Reject incoming call
+                try:
+                    # Method 1: Using input keyevent (works on most devices)
+                    result = subprocess.run(["adb", "shell", "input", "keyevent", "6"],  # KEYCODE_ENDCALL
+                                          capture_output=True, text=True, timeout=5)
+
+                    if result.returncode != 0:
+                        # Method 2: Using telephony service (for some devices)
+                        result = subprocess.run(["adb", "shell", "service", "call", "phone", "1", "s16", "reject"],
+                                              capture_output=True, text=True, timeout=5)
+
+                    if result.returncode == 0:
+                        return "Call rejected."
+                    else:
+                        return "Failed to reject call."
+                except Exception as e:
+                    logger.error(f"Error rejecting call: {e}")
+                    return "Failed to reject call."
 
             elif cmd == 'take_screenshot':
                 result = subprocess.run(["adb", "shell", "screencap", "-p", "/sdcard/screenshot.png"], capture_output=True, text=True, timeout=15)
@@ -1215,6 +1418,70 @@ class AndroidControlMiddleware:
             compatibility_results['overall_compatibility'] = 'limited'
 
         return compatibility_results
+
+    def lookup_contact(self, name):
+        """Lookup contact phone number by name"""
+        import time
+
+        # Check cache first (cache for 5 minutes)
+        current_time = time.time()
+        if current_time - self.contact_cache_timestamp > 300:  # 5 minutes
+            self.contact_cache = {}
+            self.contact_cache_timestamp = current_time
+
+            # Fetch contacts from device
+            try:
+                # Try to get contacts using content provider
+                result = subprocess.run(["adb", "shell", "content", "query", "--uri", "content://contacts/phones/", "--projection", "display_name:number"],
+                                      capture_output=True, text=True, timeout=15)
+
+                if result.returncode == 0:
+                    lines = result.stdout.strip().split('\n')
+                    for line in lines:
+                        if 'display_name=' in line and 'number=' in line:
+                            parts = line.split(', ')
+                            contact_name = ""
+                            phone_number = ""
+                            for part in parts:
+                                if part.startswith('display_name='):
+                                    contact_name = part.split('=', 1)[1]
+                                elif part.startswith('number='):
+                                    phone_number = part.split('=', 1)[1]
+
+                            if contact_name and phone_number:
+                                self.contact_cache[contact_name.lower()] = phone_number
+
+                logger.info(f"Cached {len(self.contact_cache)} contacts from device")
+
+            except Exception as e:
+                logger.debug(f"Contact lookup failed: {e}")
+
+        # Search for the contact
+        name_lower = name.lower()
+        for cached_name, number in self.contact_cache.items():
+            if name_lower in cached_name or cached_name in name_lower:
+                return number
+
+        return None
+
+    def get_caller_info(self):
+        """Get information about incoming call"""
+        try:
+            # Try to get call state and caller info
+            result = subprocess.run(["adb", "shell", "service", "call", "phone", "1"],
+                                  capture_output=True, text=True, timeout=5)
+
+            if result.returncode == 0 and result.stdout.strip():
+                # Parse caller information if available
+                output = result.stdout.strip()
+                # This is a simplified version - actual parsing would depend on device
+                return f"Incoming call detected. {output}"
+            else:
+                return "Incoming call detected, but unable to retrieve caller information."
+
+        except Exception as e:
+            logger.debug(f"Error getting caller info: {e}")
+            return "Incoming call detected."
 
     def process_user_command(self, text):
         lang = detect_language(text)

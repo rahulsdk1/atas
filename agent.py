@@ -9,7 +9,6 @@ from livekit.plugins import google
 from prompts import AGENT_INSTRUCTION, SESSION_INSTRUCTION
 from tools import get_weather, search_web, send_email
 from language_middleware import LanguageAgentHook
-from search_middleware import SearchMiddleware
 from tts_sync_middleware import TTSSyncMiddleware
 from emotions_middleware import EmotionsMiddleware
 from android_control_middleware import AndroidControlMiddleware
@@ -55,6 +54,7 @@ class Assistant(Agent):
         # Always reset state for every query
         self.language_hook.user_lang = 'en'
         user_gender = "female"
+        web_result = None  # Initialize web_result
 
         # Always detect user language and switch if changed
         self.language_hook.process_user_input(user_text)
@@ -118,12 +118,11 @@ class Assistant(Agent):
                             agent_reply = web_result
                         else:
                             agent_reply = "I couldn't find information for your search query."
+                            web_result = None
                         break
 
             if not tool_detected:
                 # Continue with information-seeking detection
-                pass
-            else:
                 # Priority 2: Clear information-seeking questions (medium priority)
                 question_patterns = [
                     'what is', 'who is', 'when did', 'where is', 'why does', 'how does', 'how to',
@@ -149,6 +148,7 @@ class Assistant(Agent):
                         agent_reply = web_result
                     else:
                         agent_reply = "I couldn't find accurate information for your query."
+                        web_result = None
                 else:
                     # Priority 3: Casual conversation (lowest priority - use agent)
                     from prompts import AGENT_INSTRUCTION
@@ -162,10 +162,8 @@ class Assistant(Agent):
         if self.strict_tts_sync is None:
             from tts_sync_middleware import StrictTTSSyncMiddleware
             self.strict_tts_sync = StrictTTSSyncMiddleware()
-        # Use web_result if available for strict TTS
-        web_result = None
-        if 'web_result' in locals():
-            web_result = web_result
+
+        # Use web_result if available for strict TTS (now properly scoped)
         tts_text = self.strict_tts_sync.get_strict_tts_text(final_reply, web_result, persona='female', tts_lang=self.language_hook.get_tts_language())
         tts_lang = self.language_hook.get_tts_language()
         # tts_plugin.speak(tts_text, language=tts_lang)

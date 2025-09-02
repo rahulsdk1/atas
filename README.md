@@ -117,11 +117,21 @@ adb devices  # Should show device as "device"
 **Device Controls:**
 - ✅ Volume control (up/down/mute) - API-adapted
 - ✅ Brightness adjustment - Multi-method fallback
+- ✅ Flashlight control (on/off) - Camera API with fallbacks
 - ✅ WiFi and Bluetooth toggle
 - ✅ Screenshot capture
 - ✅ Device lock/unlock
 - ✅ Camera operations
 - ✅ Gallery access
+
+**Phone Call Management:**
+- ✅ Make calls by name or number
+- ✅ Contact lookup from device
+- ✅ Answer incoming calls
+- ✅ Reject incoming calls
+- ✅ Check call status
+- ✅ Automatic country code formatting
+- ✅ Incoming call notifications with caller info
 
 **Advanced Features:**
 - ✅ **Smart Package Detection**: Automatic manufacturer-specific package resolution
