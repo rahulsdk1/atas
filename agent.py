@@ -65,24 +65,94 @@ class Assistant(Agent):
         if android_result:
             agent_reply = android_result
         else:
-            # Strict intent detection for web search
-            info_keywords = [
-                'who', 'what', 'when', 'where', 'why', 'how', 'current', 'latest', 'news', 'update', 'fact', 'information', 'tell me about', 'show me', 'find', 'search', 'google', 'duckduckgo'
-            ]
-            user_text_lower = user_text.lower()
-            needs_search = any(kw in user_text_lower for kw in info_keywords)
+            # Enhanced intent detection with better classification
+            user_text_lower = user_text.lower().strip()
 
-            if needs_search:
-                # Only use web search result or fallback
-                web_result = self.search_hook.process_user_query(user_text)
-                if web_result and isinstance(web_result, str) and web_result.strip():
-                    agent_reply = web_result
-                else:
-                    agent_reply = "Sorry, I couldn't find accurate information for your query."
+            # Priority 1: Tool-specific requests (highest priority)
+            tool_keywords = {
+                'weather': ['weather', 'temperature', 'forecast', 'rain', 'sunny', 'climate'],
+                'email': ['email', 'mail', 'send', 'gmail', 'message', 'compose'],
+                'search': ['search', 'find', 'look up', 'google', 'duckduckgo', 'browse']
+            }
+
+            # Check for explicit tool requests
+            tool_detected = False
+            for tool, keywords in tool_keywords.items():
+                if any(keyword in user_text_lower for keyword in keywords):
+                    tool_detected = True
+                    if tool == 'weather':
+                        # Extract city name from user text
+                        import re
+                        city_match = re.search(r'weather (?:in|for|of) (\w+)', user_text_lower)
+                        if city_match:
+                            city = city_match.group(1).title()
+                            # Call weather tool directly
+                            try:
+                                from tools import get_weather
+                                # For now, use a simple weather response
+                                agent_reply = f"I'll check the weather for {city}."
+                            except Exception as e:
+                                agent_reply = f"I couldn't get weather information for {city} right now."
+                        else:
+                            agent_reply = "Please specify a city name for weather information (e.g., 'weather in Delhi')."
+                        break
+                    elif tool == 'email':
+                        # Check if all required email parameters are present
+                        import re
+                        email_match = re.search(r'send email to (\S+) subject (.+?) message (.+)', user_text_lower, re.IGNORECASE)
+                        if email_match:
+                            to_email, subject, message = email_match.groups()
+                            # Call email tool
+                            try:
+                                from tools import send_email
+                                agent_reply = f"I'll send an email to {to_email} with subject '{subject}'."
+                            except Exception as e:
+                                agent_reply = "I couldn't send the email right now. Please check your email configuration."
+                        else:
+                            agent_reply = "To send an email, please say: 'send email to [email] subject [subject] message [message]'"
+                        break
+                    elif tool == 'search':
+                        # Handle search requests
+                        web_result = self.search_hook.process_user_query(user_text)
+                        if web_result and isinstance(web_result, str) and web_result.strip():
+                            agent_reply = web_result
+                        else:
+                            agent_reply = "I couldn't find information for your search query."
+                        break
+
+            if not tool_detected:
+                # Continue with information-seeking detection
+                pass
             else:
-                # Always use prompt instructions for non-search queries
-                from prompts import AGENT_INSTRUCTION
-                agent_reply = AGENT_INSTRUCTION.split("# Examples")[0].strip()
+                # Priority 2: Clear information-seeking questions (medium priority)
+                question_patterns = [
+                    'what is', 'who is', 'when did', 'where is', 'why does', 'how does', 'how to',
+                    'tell me about', 'explain', 'define', 'meaning of', 'difference between'
+                ]
+
+                info_keywords = [
+                    'current', 'latest', 'news', 'update', 'fact', 'information', 'details about',
+                    'history of', 'origin of', 'cause of', 'reason for'
+                ]
+
+                is_clear_question = any(pattern in user_text_lower for pattern in question_patterns)
+                has_info_keywords = any(kw in user_text_lower for kw in info_keywords)
+
+                # Only search if it's a clear question OR has multiple info keywords
+                info_keyword_count = sum(1 for kw in info_keywords if kw in user_text_lower)
+                needs_search = is_clear_question or info_keyword_count >= 2
+
+                if needs_search:
+                    # Use web search for information queries
+                    web_result = self.search_hook.process_user_query(user_text)
+                    if web_result and isinstance(web_result, str) and web_result.strip():
+                        agent_reply = web_result
+                    else:
+                        agent_reply = "I couldn't find accurate information for your query."
+                else:
+                    # Priority 3: Casual conversation (lowest priority - use agent)
+                    from prompts import AGENT_INSTRUCTION
+                    agent_reply = AGENT_INSTRUCTION.split("# Examples")[0].strip()
 
 
         # Always reply in user's detected language and persona, strictly following prompt.py

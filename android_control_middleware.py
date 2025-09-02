@@ -48,6 +48,107 @@ def check_device_connection():
         logger.error(f"Error checking device connection: {e}")
         return False
 
+def get_android_device_info():
+    """Get comprehensive Android device information for universal compatibility"""
+    device_info = {
+        'manufacturer': 'unknown',
+        'model': 'unknown',
+        'android_version': 'unknown',
+        'api_level': 'unknown',
+        'screen_size': (1080, 1920),
+        'screen_density': 480,
+        'supported': True,
+        'adb_version': 'unknown',
+        'device_type': 'phone',  # phone, tablet, tv, etc.
+        'architecture': 'unknown'
+    }
+
+    try:
+        # Get device manufacturer
+        manufacturer_result = subprocess.run(["adb", "shell", "getprop", "ro.product.manufacturer"],
+                                           capture_output=True, text=True, timeout=5)
+        if manufacturer_result.returncode == 0:
+            device_info['manufacturer'] = manufacturer_result.stdout.strip().lower()
+
+        # Get device model
+        model_result = subprocess.run(["adb", "shell", "getprop", "ro.product.model"],
+                                    capture_output=True, text=True, timeout=5)
+        if model_result.returncode == 0:
+            device_info['model'] = model_result.stdout.strip()
+
+        # Get Android version
+        version_result = subprocess.run(["adb", "shell", "getprop", "ro.build.version.release"],
+                                      capture_output=True, text=True, timeout=5)
+        if version_result.returncode == 0:
+            device_info['android_version'] = version_result.stdout.strip()
+
+        # Get API level
+        api_result = subprocess.run(["adb", "shell", "getprop", "ro.build.version.sdk"],
+                                   capture_output=True, text=True, timeout=5)
+        if api_result.returncode == 0:
+            device_info['api_level'] = int(api_result.stdout.strip())
+
+        # Get device type
+        device_type_result = subprocess.run(["adb", "shell", "getprop", "ro.build.characteristics"],
+                                          capture_output=True, text=True, timeout=5)
+        if device_type_result.returncode == 0:
+            characteristics = device_type_result.stdout.strip().lower()
+            if 'tablet' in characteristics:
+                device_info['device_type'] = 'tablet'
+            elif 'tv' in characteristics:
+                device_info['device_type'] = 'tv'
+            else:
+                device_info['device_type'] = 'phone'
+
+        # Get architecture
+        arch_result = subprocess.run(["adb", "shell", "getprop", "ro.product.cpu.abi"],
+                                   capture_output=True, text=True, timeout=5)
+        if arch_result.returncode == 0:
+            device_info['architecture'] = arch_result.stdout.strip()
+
+        # Get screen size
+        size_result = subprocess.run(["adb", "shell", "wm", "size"], capture_output=True, text=True, timeout=5)
+        if size_result.returncode == 0:
+            size_line = size_result.stdout.strip().split(':')[-1].strip()
+            try:
+                width, height = map(int, size_line.split('x'))
+                device_info['screen_size'] = (width, height)
+            except:
+                pass
+
+        # Get screen density
+        density_result = subprocess.run(["adb", "shell", "wm", "density"], capture_output=True, text=True, timeout=5)
+        if density_result.returncode == 0:
+            density_line = density_result.stdout.strip().split(':')[-1].strip()
+            try:
+                device_info['screen_density'] = int(density_line)
+            except:
+                pass
+
+        # Get ADB version
+        adb_result = subprocess.run(["adb", "version"], capture_output=True, text=True, timeout=5)
+        if adb_result.returncode == 0:
+            for line in adb_result.stdout.split('\n'):
+                if 'Version' in line:
+                    device_info['adb_version'] = line.split()[-1]
+                    break
+
+        # Determine if device is supported
+        if device_info['api_level'] != 'unknown':
+            api_level = device_info['api_level']
+            # Support Android 5.0 (API 21) and above
+            device_info['supported'] = api_level >= 21
+
+        logger.info(f"Device detected: {device_info['manufacturer']} {device_info['model']}, "
+                   f"Android {device_info['android_version']} (API {device_info['api_level']}), "
+                   f"Type: {device_info['device_type']}")
+
+        return device_info
+
+    except Exception as e:
+        logger.error(f"Error getting device info: {e}")
+        return device_info
+
 ADB_AVAILABLE = is_adb_available()
 DEVICE_CONNECTED = check_device_connection()
 
@@ -153,9 +254,15 @@ COMMAND_PATTERNS = {
 
 class AndroidControlMiddleware:
     def __init__(self):
-        # Enhanced and verified package mapping for Android apps
+        # Universal Android device compatibility system
+        self.device_info = get_android_device_info()
+        self.manufacturer = self.device_info['manufacturer']
+        self.api_level = self.device_info['api_level']
+        self.device_type = self.device_info['device_type']
+
+        # Enhanced package mapping with manufacturer-specific variations
         self.package_map = {
-            # Social Media Apps (verified package names)
+            # Social Media Apps (universal)
             'whatsapp': 'com.whatsapp',
             'snapchat': 'com.snapchat.android',
             'instagram': 'com.instagram.android',
@@ -205,11 +312,86 @@ class AndroidControlMiddleware:
             'amazon': 'com.amazon.mShop.android.shopping'
         }
 
-        # Alternative package names for different device manufacturers
-        self.alternative_packages = {
-            'camera': ['com.android.camera2', 'com.android.camera', 'com.huawei.camera', 'com.samsung.android.camera'],
-            'gallery': ['com.android.gallery3d', 'com.google.android.apps.photos', 'com.samsung.android.gallery'],
-            'settings': ['com.android.settings', 'com.samsung.android.settings', 'com.huawei.android.settings']
+        # Manufacturer-specific package variations
+        self.manufacturer_packages = {
+            'samsung': {
+                'camera': 'com.sec.android.app.camera',
+                'gallery': 'com.sec.android.gallery3d',
+                'settings': 'com.android.settings',
+                'clock': 'com.sec.android.app.clockpackage',
+                'calculator': 'com.sec.android.app.popupcalculator',
+                'messages': 'com.samsung.android.messaging'
+            },
+            'huawei': {
+                'camera': 'com.huawei.camera',
+                'gallery': 'com.huawei.gallery',
+                'settings': 'com.android.settings',
+                'clock': 'com.huawei.android.deskclock',
+                'calculator': 'com.huawei.calculator'
+            },
+            'xiaomi': {
+                'camera': 'com.android.camera',
+                'gallery': 'com.miui.gallery',
+                'settings': 'com.android.settings',
+                'clock': 'com.android.deskclock',
+                'calculator': 'com.miui.calculator'
+            },
+            'oppo': {
+                'camera': 'com.oppo.camera',
+                'gallery': 'com.coloros.gallery3d',
+                'settings': 'com.android.settings',
+                'clock': 'com.coloros.alarmclock',
+                'calculator': 'com.coloros.calculator'
+            },
+            'vivo': {
+                'camera': 'com.android.camera',
+                'gallery': 'com.android.gallery3d',
+                'settings': 'com.android.settings',
+                'clock': 'com.android.deskclock',
+                'calculator': 'com.android.calculator2'
+            },
+            'oneplus': {
+                'camera': 'com.oneplus.camera',
+                'gallery': 'com.oneplus.gallery',
+                'settings': 'com.android.settings',
+                'clock': 'com.oneplus.deskclock',
+                'calculator': 'com.oneplus.calculator'
+            },
+            'google': {
+                'camera': 'com.google.android.apps.cameralite',
+                'gallery': 'com.google.android.apps.photos',
+                'settings': 'com.android.settings',
+                'clock': 'com.google.android.deskclock',
+                'calculator': 'com.google.android.calculator'
+            }
+        }
+
+        # Android version-specific adaptations
+        self.api_adaptations = {
+            'volume_control': {
+                'legacy': lambda: ["adb", "shell", "input", "keyevent", "24"],  # API < 26
+                'modern': lambda: ["adb", "shell", "cmd", "media_session", "volume", "--stream", "3", "--set", "10"]  # API >= 26
+            },
+            'brightness_control': {
+                'legacy': lambda level: ["adb", "shell", "settings", "put", "system", "screen_brightness", level],
+                'modern': lambda level: ["adb", "shell", "settings", "put", "system", "screen_brightness", level]
+            }
+        }
+
+        # Device-specific UI adaptation
+        self.ui_adaptations = {
+            'tablet': {
+                'search_offset': (0.9, 0.08),  # Different UI layout for tablets
+                'status_offset': (0.15, 0.15)
+            },
+            'phone': {
+                'search_offset': (0.85, 0.05),
+                'status_offset': (0.2, 0.18)
+            },
+            'tv': {
+                'search_offset': (0.8, 0.1),
+                'status_offset': (0.25, 0.2)
+            }
         }
 
         # Device screen information (will be populated on first use)
@@ -257,36 +439,65 @@ class AndroidControlMiddleware:
         return x, y
 
     def get_package_name(self, app_name):
-        """Get the correct package name for an app, trying alternatives if needed"""
+        """Get the correct package name for an app with universal device compatibility"""
         app_name_lower = app_name.lower()
 
-        # First try the primary package
+        # First try manufacturer-specific package
+        if self.manufacturer in self.manufacturer_packages and app_name_lower in self.manufacturer_packages[self.manufacturer]:
+            manufacturer_package = self.manufacturer_packages[self.manufacturer][app_name_lower]
+            try:
+                result = subprocess.run(["adb", "shell", "pm", "list", "packages", manufacturer_package],
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0 and manufacturer_package in result.stdout:
+                    logger.info(f"Using manufacturer-specific package {manufacturer_package} for {app_name} on {self.manufacturer}")
+                    return manufacturer_package
+            except Exception as e:
+                logger.debug(f"Manufacturer package {manufacturer_package} not found: {e}")
+
+        # Try primary universal package
         if app_name_lower in self.package_map:
             primary_package = self.package_map[app_name_lower]
-
-            # Verify if the package exists on the device
             try:
                 result = subprocess.run(["adb", "shell", "pm", "list", "packages", primary_package],
                                       capture_output=True, text=True, timeout=5)
                 if result.returncode == 0 and primary_package in result.stdout:
                     return primary_package
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Primary package {primary_package} not found: {e}")
 
-        # If primary package not found, try alternatives
-        if app_name_lower in self.alternative_packages:
-            for alt_package in self.alternative_packages[app_name_lower]:
+        # Try alternative packages for this manufacturer
+        if self.manufacturer in self.manufacturer_packages:
+            for alt_app, alt_package in self.manufacturer_packages[self.manufacturer].items():
+                if alt_app == app_name_lower:
+                    continue  # Already tried this
                 try:
                     result = subprocess.run(["adb", "shell", "pm", "list", "packages", alt_package],
                                           capture_output=True, text=True, timeout=5)
                     if result.returncode == 0 and alt_package in result.stdout:
-                        logger.info(f"Using alternative package {alt_package} for {app_name}")
+                        logger.info(f"Using alternative manufacturer package {alt_package} for {app_name}")
                         return alt_package
-                except:
-                    continue
+                except Exception as e:
+                    logger.debug(f"Alternative package {alt_package} not found: {e}")
 
-        # Fallback to default pattern
-        return f"com.{app_name_lower}" if not app_name_lower.startswith('com.') else app_name_lower
+        # Try other manufacturer packages as fallback
+        for manufacturer, packages in self.manufacturer_packages.items():
+            if manufacturer == self.manufacturer:
+                continue  # Already tried this manufacturer
+            if app_name_lower in packages:
+                alt_package = packages[app_name_lower]
+                try:
+                    result = subprocess.run(["adb", "shell", "pm", "list", "packages", alt_package],
+                                          capture_output=True, text=True, timeout=5)
+                    if result.returncode == 0 and alt_package in result.stdout:
+                        logger.info(f"Using cross-manufacturer package {alt_package} for {app_name}")
+                        return alt_package
+                except Exception as e:
+                    logger.debug(f"Cross-manufacturer package {alt_package} not found: {e}")
+
+        # Final fallback to default pattern
+        fallback_package = f"com.{app_name_lower}" if not app_name_lower.startswith('com.') else app_name_lower
+        logger.warning(f"Using fallback package {fallback_package} for {app_name} - may not work on all devices")
+        return fallback_package
 
         # App-specific knowledge base
         self.app_knowledge = {
@@ -353,7 +564,14 @@ class AndroidControlMiddleware:
 
                 # Method 2: Using am start (fallback)
                 if not success:
+                    # Universal error handling and graceful degradation
                     try:
+                        # Pre-execution device health check
+                        if not self.device_info['supported']:
+                            return f"Device not supported. Minimum Android 5.0 (API 21) required. Current: Android {self.device_info['android_version']} (API {self.device_info['api_level']})"
+            
+                        # Log command execution attempt
+                        logger.info(f"Executing command '{cmd}' with args {args} on {self.manufacturer} {self.device_info['model']} (Android {self.device_info['android_version']})")
                         result = subprocess.run(["adb", "shell", "am", "start", "-n", f"{package}/.MainActivity"],
                                               capture_output=True, text=True, timeout=10)
                         if result.returncode == 0:
@@ -398,14 +616,48 @@ class AndroidControlMiddleware:
 
             elif cmd == 'set_volume':
                 direction = args[0]
-                if direction in ['up', 'increase', 'raise']:
-                    result = subprocess.run(["adb", "shell", "input", "keyevent", "24"], capture_output=True, text=True, timeout=5)
-                elif direction in ['down', 'decrease', 'lower']:
-                    result = subprocess.run(["adb", "shell", "input", "keyevent", "25"], capture_output=True, text=True, timeout=5)
-                elif direction == 'mute':
-                    result = subprocess.run(["adb", "shell", "input", "keyevent", "164"], capture_output=True, text=True, timeout=5)
+
+                # Use Android version-specific volume control
+                if self.api_level >= 26:  # Android 8.0+
+                    try:
+                        if direction in ['up', 'increase', 'raise']:
+                            # Try modern volume control first
+                            result = subprocess.run(["adb", "shell", "cmd", "media_session", "volume", "--stream", "3", "--adjust", "raise"],
+                                                  capture_output=True, text=True, timeout=5)
+                            if result.returncode != 0:
+                                # Fallback to keyevent
+                                result = subprocess.run(["adb", "shell", "input", "keyevent", "24"], capture_output=True, text=True, timeout=5)
+                        elif direction in ['down', 'decrease', 'lower']:
+                            result = subprocess.run(["adb", "shell", "cmd", "media_session", "volume", "--stream", "3", "--adjust", "lower"],
+                                                  capture_output=True, text=True, timeout=5)
+                            if result.returncode != 0:
+                                result = subprocess.run(["adb", "shell", "input", "keyevent", "25"], capture_output=True, text=True, timeout=5)
+                        elif direction == 'mute':
+                            result = subprocess.run(["adb", "shell", "input", "keyevent", "164"], capture_output=True, text=True, timeout=5)
+                        else:
+                            return f"Unknown volume direction: {direction}"
+                    except Exception as e:
+                        logger.warning(f"Modern volume control failed, using legacy: {e}")
+                        # Fallback to legacy method
+                        if direction in ['up', 'increase', 'raise']:
+                            result = subprocess.run(["adb", "shell", "input", "keyevent", "24"], capture_output=True, text=True, timeout=5)
+                        elif direction in ['down', 'decrease', 'lower']:
+                            result = subprocess.run(["adb", "shell", "input", "keyevent", "25"], capture_output=True, text=True, timeout=5)
+                        elif direction == 'mute':
+                            result = subprocess.run(["adb", "shell", "input", "keyevent", "164"], capture_output=True, text=True, timeout=5)
+                        else:
+                            return f"Unknown volume direction: {direction}"
                 else:
-                    return f"Unknown volume direction: {direction}"
+                    # Legacy Android versions (API < 26)
+                    if direction in ['up', 'increase', 'raise']:
+                        result = subprocess.run(["adb", "shell", "input", "keyevent", "24"], capture_output=True, text=True, timeout=5)
+                    elif direction in ['down', 'decrease', 'lower']:
+                        result = subprocess.run(["adb", "shell", "input", "keyevent", "25"], capture_output=True, text=True, timeout=5)
+                    elif direction == 'mute':
+                        result = subprocess.run(["adb", "shell", "input", "keyevent", "164"], capture_output=True, text=True, timeout=5)
+                    else:
+                        return f"Unknown volume direction: {direction}"
+
                 if result.returncode == 0:
                     return f"Setting volume {direction}."
                 else:
@@ -413,12 +665,62 @@ class AndroidControlMiddleware:
 
             elif cmd == 'set_brightness':
                 level = args[1]
-                # Brightness control via ADB (may require root or system app)
-                result = subprocess.run(["adb", "shell", "settings", "put", "system", "screen_brightness", level], capture_output=True, text=True, timeout=10)
-                if result.returncode == 0:
+
+                # Try different brightness control methods based on Android version and manufacturer
+                success = False
+
+                # Method 1: Standard settings command (works on most devices)
+                try:
+                    result = subprocess.run(["adb", "shell", "settings", "put", "system", "screen_brightness", level],
+                                          capture_output=True, text=True, timeout=10)
+                    if result.returncode == 0:
+                        success = True
+                        logger.info(f"Brightness set to {level}% using standard method")
+                except Exception as e:
+                    logger.debug(f"Standard brightness method failed: {e}")
+
+                # Method 2: Try secure settings (may require different permissions)
+                if not success:
+                    try:
+                        result = subprocess.run(["adb", "shell", "settings", "put", "secure", "screen_brightness", level],
+                                              capture_output=True, text=True, timeout=10)
+                        if result.returncode == 0:
+                            success = True
+                            logger.info(f"Brightness set to {level}% using secure method")
+                    except Exception as e:
+                        logger.debug(f"Secure brightness method failed: {e}")
+
+                # Method 3: Try global settings (for some manufacturers)
+                if not success:
+                    try:
+                        result = subprocess.run(["adb", "shell", "settings", "put", "global", "screen_brightness", level],
+                                              capture_output=True, text=True, timeout=10)
+                        if result.returncode == 0:
+                            success = True
+                            logger.info(f"Brightness set to {level}% using global method")
+                    except Exception as e:
+                        logger.debug(f"Global brightness method failed: {e}")
+
+                # Method 4: Manufacturer-specific commands
+                if not success and self.manufacturer in ['samsung', 'huawei', 'xiaomi']:
+                    try:
+                        # Some manufacturers have different brightness commands
+                        result = subprocess.run(["adb", "shell", "settings", "put", "system", "screen_brightness_mode", "0"],
+                                              capture_output=True, text=True, timeout=5)
+                        if result.returncode == 0:
+                            result = subprocess.run(["adb", "shell", "settings", "put", "system", "screen_brightness", level],
+                                                  capture_output=True, text=True, timeout=10)
+                            if result.returncode == 0:
+                                success = True
+                                logger.info(f"Brightness set to {level}% using manufacturer-specific method")
+                    except Exception as e:
+                        logger.debug(f"Manufacturer-specific brightness method failed: {e}")
+
+                if success:
                     return f"Setting brightness to {level}%."
                 else:
-                    return f"Failed to set brightness to {level}%."
+                    logger.warning(f"All brightness control methods failed for {self.manufacturer} device")
+                    return f"Failed to set brightness to {level}%. This may require system permissions or device-specific settings."
 
             elif cmd == 'take_screenshot':
                 result = subprocess.run(["adb", "shell", "screencap", "-p", "/sdcard/screenshot.png"], capture_output=True, text=True, timeout=15)
@@ -515,22 +817,39 @@ class AndroidControlMiddleware:
                 # Open WhatsApp and search for contact
                 result = subprocess.run(["adb", "shell", "am", "start", "-n", "com.whatsapp/.Main"], capture_output=True, text=True, timeout=10)
                 if result.returncode == 0:
-                    # Wait for app to load
-                    subprocess.run(["adb", "shell", "sleep", "2"], capture_output=True, text=True, timeout=3)
+                    # Wait for app to load (device-specific timing)
+                    sleep_time = 3 if self.device_type == 'phone' else 5  # Tablets/TV need more time
+                    subprocess.run(["adb", "shell", "sleep", str(sleep_time)], capture_output=True, text=True, timeout=sleep_time + 1)
 
-                    # Tap on search icon (using percentage-based coordinates)
-                    search_x, search_y = self.calculate_coordinates(85, 5)  # Top-right area
-                    subprocess.run(["adb", "shell", "input", "tap", str(search_x), str(search_y)],
-                                 capture_output=True, text=True, timeout=5)
+                    # Get device-specific search coordinates
+                    if self.device_type in self.ui_adaptations:
+                        search_coords = self.ui_adaptations[self.device_type]['search_offset']
+                        search_x, search_y = self.calculate_coordinates(search_coords[0] * 100, search_coords[1] * 100)
+                    else:
+                        # Default coordinates for unknown device types
+                        search_x, search_y = self.calculate_coordinates(85, 5)
 
-                    # Wait a bit and type contact name
-                    subprocess.run(["adb", "shell", "sleep", "1"], capture_output=True, text=True, timeout=2)
-                    subprocess.run(["adb", "shell", "input", "text", contact.replace(" ", "%s")],
-                                 capture_output=True, text=True, timeout=5)
+                    # Tap on search icon
+                    tap_result = subprocess.run(["adb", "shell", "input", "tap", str(int(search_x)), str(int(search_y))],
+                                              capture_output=True, text=True, timeout=5)
 
-                    return f"Opening chat with {contact} in WhatsApp."
+                    if tap_result.returncode == 0:
+                        # Wait and type contact name
+                        subprocess.run(["adb", "shell", "sleep", "1"], capture_output=True, text=True, timeout=2)
+
+                        # Handle special characters in contact names
+                        safe_contact = contact.replace(" ", "%s").replace("'", "\\'").replace('"', '\\"')
+                        type_result = subprocess.run(["adb", "shell", "input", "text", safe_contact],
+                                                   capture_output=True, text=True, timeout=5)
+
+                        if type_result.returncode == 0:
+                            return f"Opening chat with {contact} in WhatsApp."
+                        else:
+                            return f"WhatsApp opened but failed to search for {contact}."
+                    else:
+                        return f"WhatsApp opened but failed to access search function."
                 else:
-                    return f"Failed to open chat with {contact} in WhatsApp."
+                    return f"Failed to open WhatsApp. Please ensure it's installed and try again."
 
             elif cmd == 'whatsapp_view_status':
                 contact = args[0]
@@ -718,11 +1037,40 @@ class AndroidControlMiddleware:
                 return f"Command '{cmd}' not implemented yet."
 
         except subprocess.TimeoutExpired:
-            logger.error(f"Command {cmd} timed out.")
-            return f"Command {cmd} timed out."
+            logger.error(f"Command {cmd} timed out on {self.manufacturer} device")
+            return f"Command timed out. The device may be busy or unresponsive. Please try again."
+
+        except ConnectionError:
+            logger.error(f"ADB connection lost during command {cmd}")
+            return f"Lost connection to Android device. Please check USB connection and try again."
+
+        except PermissionError:
+            logger.error(f"Permission denied for command {cmd} on {self.manufacturer} device")
+            return f"Permission denied. Some features may require additional device permissions or root access."
+
+        except OSError as e:
+            if "No such file or directory" in str(e):
+                logger.error(f"ADB not found in system PATH")
+                return f"ADB not found. Please ensure Android SDK platform tools are installed and in system PATH."
+            else:
+                logger.error(f"OS error during command {cmd}: {str(e)}")
+                return f"System error occurred. Please check device connection and try again."
+
         except Exception as e:
-            logger.error(f"Error executing command {cmd}: {str(e)}")
-            return f"Error executing command {cmd}: {str(e)}"
+            error_msg = str(e)
+            logger.error(f"Unexpected error executing command {cmd}: {error_msg}")
+
+            # Provide user-friendly error messages based on error type
+            if "device unauthorized" in error_msg.lower():
+                return f"Device not authorized. Please check USB debugging authorization on your Android device."
+            elif "device not found" in error_msg.lower():
+                return f"Android device not found. Please ensure device is connected and USB debugging is enabled."
+            elif "closed" in error_msg.lower():
+                return f"Device connection closed unexpectedly. Please reconnect your Android device."
+            elif "timeout" in error_msg.lower():
+                return f"Command timed out. The device may be busy or the operation may take longer on this device model."
+            else:
+                return f"Command failed due to device compatibility issue. This feature may not be fully supported on {self.manufacturer} {self.device_info['model']} with Android {self.device_info['android_version']}."
 
     def summarize_whatsapp_chats(self, contact_name, num_messages=20):
         """Summarize recent WhatsApp chats with a contact"""
@@ -748,27 +1096,125 @@ class AndroidControlMiddleware:
         health_status = {
             'adb_available': ADB_AVAILABLE,
             'device_connected': check_device_connection(),
+            'device_info': self.device_info,
             'apps_verified': {},
-            'overall_status': 'unknown'
+            'compatibility_score': 0,
+            'overall_status': 'unknown',
+            'recommendations': []
         }
 
         # Check critical apps
-        critical_apps = ['whatsapp', 'chrome', 'settings']
+        critical_apps = ['whatsapp', 'chrome', 'settings', 'camera']
         for app in critical_apps:
             package = self.get_package_name(app)
-            health_status['apps_verified'][app] = package != f"com.{app}"
+            is_available = False
+            try:
+                result = subprocess.run(["adb", "shell", "pm", "list", "packages", package],
+                                      capture_output=True, text=True, timeout=5)
+                is_available = result.returncode == 0 and package in result.stdout
+            except:
+                pass
+            health_status['apps_verified'][app] = is_available
+
+        # Calculate compatibility score
+        score = 0
+        max_score = 100
+
+        if health_status['adb_available']:
+            score += 25
+        else:
+            health_status['recommendations'].append("Install ADB (Android Debug Bridge)")
+
+        if health_status['device_connected']:
+            score += 25
+        else:
+            health_status['recommendations'].append("Connect Android device with USB debugging enabled")
+
+        if self.device_info['supported']:
+            score += 20
+        else:
+            health_status['recommendations'].append("Update Android to version 5.0 or higher")
+
+        # Check app availability
+        available_apps = sum(1 for available in health_status['apps_verified'].values() if available)
+        app_score = (available_apps / len(critical_apps)) * 20
+        score += app_score
+
+        if available_apps < len(critical_apps):
+            missing_apps = [app for app, available in health_status['apps_verified'].items() if not available]
+            health_status['recommendations'].append(f"Install missing apps: {', '.join(missing_apps)}")
+
+        # Manufacturer-specific recommendations
+        if self.manufacturer == 'samsung':
+            health_status['recommendations'].append("For best results, disable Samsung's security features for ADB")
+        elif self.manufacturer == 'huawei':
+            health_status['recommendations'].append("Allow USB debugging in Huawei's developer options")
+        elif self.manufacturer == 'xiaomi':
+            health_status['recommendations'].append("Enable USB debugging and disable MIUI optimization")
+
+        health_status['compatibility_score'] = score
 
         # Determine overall status
-        if not health_status['adb_available']:
-            health_status['overall_status'] = 'adb_not_available'
-        elif not health_status['device_connected']:
-            health_status['overall_status'] = 'device_not_connected'
-        elif not any(health_status['apps_verified'].values()):
-            health_status['overall_status'] = 'critical_apps_missing'
+        if score >= 80:
+            health_status['overall_status'] = 'excellent'
+        elif score >= 60:
+            health_status['overall_status'] = 'good'
+        elif score >= 40:
+            health_status['overall_status'] = 'fair'
+        elif score >= 20:
+            health_status['overall_status'] = 'poor'
         else:
-            health_status['overall_status'] = 'healthy'
+            health_status['overall_status'] = 'critical'
 
         return health_status
+
+    def test_device_compatibility(self):
+        """Test various Android device features for compatibility"""
+        compatibility_results = {
+            'device_info': self.device_info,
+            'tests': {},
+            'overall_compatibility': 'unknown'
+        }
+
+        # Test basic ADB commands
+        test_commands = [
+            ('basic_shell', ["adb", "shell", "echo", "test"]),
+            ('package_manager', ["adb", "shell", "pm", "list", "packages", "-f"]),
+            ('input_system', ["adb", "shell", "input", "keyevent", "KEYCODE_HOME"]),
+            ('settings_access', ["adb", "shell", "settings", "list", "system"]),
+            ('screen_info', ["adb", "shell", "wm", "size"]),
+        ]
+
+        for test_name, command in test_commands:
+            try:
+                result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+                compatibility_results['tests'][test_name] = {
+                    'success': result.returncode == 0,
+                    'return_code': result.returncode,
+                    'error': result.stderr.strip() if result.stderr else None
+                }
+            except Exception as e:
+                compatibility_results['tests'][test_name] = {
+                    'success': False,
+                    'error': str(e)
+                }
+
+        # Calculate overall compatibility
+        successful_tests = sum(1 for test in compatibility_results['tests'].values() if test['success'])
+        total_tests = len(compatibility_results['tests'])
+
+        if successful_tests == total_tests:
+            compatibility_results['overall_compatibility'] = 'full'
+        elif successful_tests >= total_tests * 0.8:
+            compatibility_results['overall_compatibility'] = 'high'
+        elif successful_tests >= total_tests * 0.6:
+            compatibility_results['overall_compatibility'] = 'medium'
+        elif successful_tests >= total_tests * 0.4:
+            compatibility_results['overall_compatibility'] = 'low'
+        else:
+            compatibility_results['overall_compatibility'] = 'limited'
+
+        return compatibility_results
 
     def process_user_command(self, text):
         lang = detect_language(text)
@@ -793,16 +1239,28 @@ class AndroidControlMiddleware:
         # Special handling for health check requests
         if "health check" in text.lower() or "system status" in text.lower():
             health = self.health_check()
-            status_msg = f"System Health: {health['overall_status'].replace('_', ' ').title()}"
-            if health['adb_available']:
-                status_msg += " | ADB: ✓"
-            else:
-                status_msg += " | ADB: ✗"
-            if health['device_connected']:
-                status_msg += " | Device: ✓"
-            else:
-                status_msg += " | Device: ✗"
+            status_msg = f"System Health: {health['overall_status'].title()} ({health['compatibility_score']}/100)"
+            status_msg += f" | Device: {self.manufacturer.title()} {self.device_info['model']}"
+            status_msg += f" | Android {self.device_info['android_version']} (API {self.device_info['api_level']})"
+            status_msg += f" | ADB: {'✓' if health['adb_available'] else '✗'}"
+            status_msg += f" | Connection: {'✓' if health['device_connected'] else '✗'}"
+
+            if health['recommendations']:
+                status_msg += f" | Recommendations: {', '.join(health['recommendations'])}"
+
             return translate_text(status_msg, lang)
+
+        # Special handling for compatibility test requests
+        if "compatibility test" in text.lower() or "test device" in text.lower():
+            compat = self.test_device_compatibility()
+            test_results = []
+            for test_name, result in compat['tests'].items():
+                status = "✓" if result['success'] else "✗"
+                test_results.append(f"{test_name}: {status}")
+
+            compat_msg = f"Device Compatibility: {compat['overall_compatibility'].title()}"
+            compat_msg += f" | Tests: {' | '.join(test_results)}"
+            return translate_text(compat_msg, lang)
 
         if cmd:
             result = self.execute_command(cmd, args)
