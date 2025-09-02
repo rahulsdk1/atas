@@ -21,7 +21,21 @@ load_dotenv()
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(
-            instructions=AGENT_INSTRUCTION,
+            instructions="""You are ATAS, an AI assistant. CRITICAL INSTRUCTIONS:
+
+1. For ANY information-seeking queries (questions, facts, current events, explanations), you MUST use the search_web tool
+2. For weather-related queries, you MUST use the get_weather tool
+3. For email-related requests, you MUST use the send_email tool
+4. NEVER provide information from your training data alone - always use tools for current/accurate information
+5. If a tool fails, clearly state that you couldn't retrieve the information
+6. Always be helpful, accurate, and use the tools appropriately
+
+Examples of when to use tools:
+- "Who is the current president?" → Use search_web
+- "What's the weather in Delhi?" → Use get_weather
+- "Send email to john@example.com" → Use send_email
+- "What is machine learning?" → Use search_web
+- "How does photosynthesis work?" → Use search_web""",
             llm=google.beta.realtime.RealtimeModel(
                 voice="Aoede",
                 temperature=0.8,
@@ -44,6 +58,9 @@ class Assistant(Agent):
         # Language persistence
         self.language_state_file = os.path.join(os.path.dirname(__file__), '.language_state.json')
         self.load_language_state()
+
+        # Store current user input for processing
+        self._current_user_input = None
 
     def load_language_state(self):
         """Load language state from file for consistency across runs"""
@@ -82,6 +99,31 @@ class Assistant(Agent):
     def get_tts_language(self):
         # Get language for TTS
         return self.language_hook.get_tts_language()
+
+    def on_user_input(self, text):
+        """Store the current user input for processing"""
+        self._current_user_input = text
+        return text
+
+    def generate_reply(self, instructions=None):
+        """Override the default reply generation to use our middleware"""
+        # Get the current user input from the session
+        if hasattr(self, '_current_user_input') and self._current_user_input:
+            user_input = self._current_user_input
+
+            # Process through our middleware first
+            result = self.process_query_with_middlewares(user_input)
+
+            # If we got a result from middleware, use it
+            if result and result.get("reply_text"):
+                return result["reply_text"]
+
+        # Fallback to default behavior
+        try:
+            return super().generate_reply(instructions)
+        except Exception as e:
+            # If parent method fails, return a default response
+            return "I'm sorry, I encountered an error processing your request. Please try again."
 
     def process_query_with_middlewares(self, user_text):
         # Initialize web_result
