@@ -8,6 +8,7 @@ No changes required to original code. Import and use hooks as needed.
 import re
 import subprocess
 import logging
+import time
 from language_middleware import detect_language, translate_text
 
 # Set up logging
@@ -423,6 +424,35 @@ class AndroidControlMiddleware:
         self.screen_size = None
         self.screen_density = None
 
+        # App-specific knowledge base
+        self.app_knowledge = {
+            'whatsapp': {
+                'description': 'WhatsApp Messenger for instant messaging and calling',
+                'features': ['Text messaging', 'Voice calls', 'Video calls', 'Group chats', 'Status updates', 'Media sharing'],
+                'common_actions': ['Send message', 'Make call', 'View status', 'Create group', 'Share media']
+            },
+            'snapchat': {
+                'description': 'Snapchat for ephemeral messaging and stories',
+                'features': ['Snaps', 'Stories', 'Chat', 'Discover', 'Spotlight', 'Lenses'],
+                'common_actions': ['Send snap', 'View stories', 'Chat with friends', 'Add friends', 'Use lenses']
+            },
+            'instagram': {
+                'description': 'Instagram for photo and video sharing',
+                'features': ['Feed', 'Stories', 'Reels', 'DMs', 'Live streaming', 'Shopping'],
+                'common_actions': ['Like posts', 'Comment', 'Follow users', 'Send DMs', 'View stories']
+            },
+            'facebook': {
+                'description': 'Facebook social networking platform',
+                'features': ['News Feed', 'Groups', 'Events', 'Messenger', 'Marketplace'],
+                'common_actions': ['Like posts', 'Comment', 'Share content', 'Join groups', 'Send messages']
+            },
+            'youtube': {
+                'description': 'YouTube video streaming platform',
+                'features': ['Video streaming', 'Subscriptions', 'Comments', 'Live streaming', 'Shorts'],
+                'common_actions': ['Watch videos', 'Subscribe to channels', 'Like videos', 'Comment', 'Share videos']
+            }
+        }
+
     def get_screen_info(self):
         """Get device screen size and density for coordinate calculations"""
         if self.screen_size is None:
@@ -524,34 +554,6 @@ class AndroidControlMiddleware:
         logger.warning(f"Using fallback package {fallback_package} for {app_name} - may not work on all devices")
         return fallback_package
 
-        # App-specific knowledge base
-        self.app_knowledge = {
-            'whatsapp': {
-                'description': 'WhatsApp Messenger for instant messaging and calling',
-                'features': ['Text messaging', 'Voice calls', 'Video calls', 'Group chats', 'Status updates', 'Media sharing'],
-                'common_actions': ['Send message', 'Make call', 'View status', 'Create group', 'Share media']
-            },
-            'snapchat': {
-                'description': 'Snapchat for ephemeral messaging and stories',
-                'features': ['Snaps', 'Stories', 'Chat', 'Discover', 'Spotlight', 'Lenses'],
-                'common_actions': ['Send snap', 'View stories', 'Chat with friends', 'Add friends', 'Use lenses']
-            },
-            'instagram': {
-                'description': 'Instagram for photo and video sharing',
-                'features': ['Feed', 'Stories', 'Reels', 'DMs', 'Live streaming', 'Shopping'],
-                'common_actions': ['Like posts', 'Comment', 'Follow users', 'Send DMs', 'View stories']
-            },
-            'facebook': {
-                'description': 'Facebook social networking platform',
-                'features': ['News Feed', 'Groups', 'Events', 'Messenger', 'Marketplace'],
-                'common_actions': ['Like posts', 'Comment', 'Share content', 'Join groups', 'Send messages']
-            },
-            'youtube': {
-                'description': 'YouTube video streaming platform',
-                'features': ['Video streaming', 'Subscriptions', 'Comments', 'Live streaming', 'Shorts'],
-                'common_actions': ['Watch videos', 'Subscribe to channels', 'Like videos', 'Comment', 'Share videos']
-            }
-        }
 
     def detect_command(self, text):
         """Detects which command pattern matches the user text."""
@@ -1421,8 +1423,6 @@ class AndroidControlMiddleware:
 
     def lookup_contact(self, name):
         """Lookup contact phone number by name"""
-        import time
-
         # Check cache first (cache for 5 minutes)
         current_time = time.time()
         if current_time - self.contact_cache_timestamp > 300:  # 5 minutes

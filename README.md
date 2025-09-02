@@ -20,7 +20,7 @@ Before you start, **make sure to follow this tutorial to set up the voice agent 
 🎥 [Watch here](https://youtu.be/An4NwL8QSQ4?si=v1dNDDonmpCG1Els)
 
 ---
-1. Create the Virtual Envrionment first!
+1. Create the Virtual Environment first!
 2. Activate it
 3. Install all the required libraries in the requirements.txt file
 4. In the .ENV - File you should paste your API-Keys and your LiveKit Secret, LiveKit URL.

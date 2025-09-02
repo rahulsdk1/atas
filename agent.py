@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+import re
 
 from livekit import agents
 from livekit.agents import AgentSession, Agent, RoomInputOptions
@@ -53,7 +54,7 @@ class Assistant(Agent):
     def process_query_with_middlewares(self, user_text):
         # Always reset state for every query
         self.language_hook.user_lang = 'en'
-        user_gender = "female"
+        # user_gender = "female"  # Not used, removed to clean up code
         web_result = None  # Initialize web_result
 
         # Always detect user language and switch if changed
@@ -82,13 +83,11 @@ class Assistant(Agent):
                     tool_detected = True
                     if tool == 'weather':
                         # Extract city name from user text
-                        import re
                         city_match = re.search(r'weather (?:in|for|of) (\w+)', user_text_lower)
                         if city_match:
                             city = city_match.group(1).title()
                             # Call weather tool directly
                             try:
-                                from tools import get_weather
                                 # For now, use a simple weather response
                                 agent_reply = f"I'll check the weather for {city}."
                             except Exception as e:
@@ -98,13 +97,11 @@ class Assistant(Agent):
                         break
                     elif tool == 'email':
                         # Check if all required email parameters are present
-                        import re
                         email_match = re.search(r'send email to (\S+) subject (.+?) message (.+)', user_text_lower, re.IGNORECASE)
                         if email_match:
                             to_email, subject, message = email_match.groups()
                             # Call email tool
                             try:
-                                from tools import send_email
                                 agent_reply = f"I'll send an email to {to_email} with subject '{subject}'."
                             except Exception as e:
                                 agent_reply = "I couldn't send the email right now. Please check your email configuration."
@@ -151,7 +148,6 @@ class Assistant(Agent):
                         web_result = None
                 else:
                     # Priority 3: Casual conversation (lowest priority - use agent)
-                    from prompts import AGENT_INSTRUCTION
                     agent_reply = AGENT_INSTRUCTION.split("# Examples")[0].strip()
 
 

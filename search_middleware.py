@@ -3,10 +3,8 @@
 Middleware to intercept user queries and route information requests to web search for accurate answers.
 No changes required to original code. Import and use hooks as needed.
 """
-import asyncio
 import logging
 from ddgs import DDGS
-from tools import search_web
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +65,6 @@ class SearchMiddleware:
 # If web_result is not None, use it as the agent's reply
 
 # Patch: Fast, robust web search with friendly error handling
-import concurrent.futures
 
 class FastSearchMiddleware:
     """
