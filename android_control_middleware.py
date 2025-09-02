@@ -195,7 +195,6 @@ COMMAND_PATTERNS = {
     'whatsapp_create_group': r'create group (.+) in whatsapp',
     'whatsapp_add_to_group': r'add (.+) to group in whatsapp',
     'whatsapp_summarize_chat': r'summarize (last \d+ )?messages? with (.+) in whatsapp',
-    # Removed duplicate pattern - already defined above
     'whatsapp_mute_chat': r'mute (.+) chat in whatsapp',
     'whatsapp_unmute_chat': r'unmute (.+) chat in whatsapp',
 

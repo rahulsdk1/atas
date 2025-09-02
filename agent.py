@@ -153,20 +153,28 @@ class Assistant(Agent):
                 # Priority 2: Clear information-seeking questions (medium priority)
                 question_patterns = [
                     'what is', 'who is', 'when did', 'where is', 'why does', 'how does', 'how to',
-                    'tell me about', 'explain', 'define', 'meaning of', 'difference between'
+                    'tell me about', 'explain', 'define', 'meaning of', 'difference between',
+                    'what are', 'who are', 'when was', 'where are', 'why is', 'how do',
+                    'can you tell me', 'do you know', 'i want to know'
                 ]
 
                 info_keywords = [
                     'current', 'latest', 'news', 'update', 'fact', 'information', 'details about',
-                    'history of', 'origin of', 'cause of', 'reason for'
+                    'history of', 'origin of', 'cause of', 'reason for', 'about', 'regarding',
+                    'population', 'capital', 'area', 'located', 'founded', 'established'
                 ]
 
                 is_clear_question = any(pattern in user_text_lower for pattern in question_patterns)
                 has_info_keywords = any(kw in user_text_lower for kw in info_keywords)
 
-                # Only search if it's a clear question OR has multiple info keywords
+                # Enhanced search detection
                 info_keyword_count = sum(1 for kw in info_keywords if kw in user_text_lower)
-                needs_search = is_clear_question or info_keyword_count >= 2
+                has_question_mark = '?' in user_text
+                is_imperative_search = any(word in user_text_lower for word in ['search', 'find', 'look up', 'google', 'tell me'])
+
+                # More aggressive search triggering
+                needs_search = (is_clear_question or has_question_mark or is_imperative_search or
+                              info_keyword_count >= 1 or len(user_text.split()) > 8)
 
                 if needs_search:
                     # Use web search for information queries
