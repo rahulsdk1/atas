@@ -35,44 +35,27 @@ def is_adb_available():
 # Enhanced device connection check
 def check_device_connection():
     """Check if Android device is properly connected and authorized"""
-    try:
-        result = subprocess.run(["adb", "devices"], capture_output=True, text=True, timeout=5)
-        if "device" in result.stdout and "unauthorized" not in result.stdout:
-            # Get device info
-            info_result = subprocess.run(["adb", "shell", "getprop", "ro.product.model"], capture_output=True, text=True, timeout=5)
-            if info_result.returncode == 0:
-                device_model = info_result.stdout.strip()
-                logger.info(f"Connected Android device: {device_model}")
-                return True
-        return False
-    except Exception as e:
-        logger.error(f"Error checking device connection: {e}")
-        return False
-
-def get_android_device_info():
-    """Get comprehensive Android device information for universal compatibility"""
     device_info = {
         'manufacturer': 'unknown',
         'model': 'unknown',
         'android_version': 'unknown',
         'api_level': 'unknown',
-        'screen_size': (1080, 1920),
-        'screen_density': 480,
-        'supported': True,
+        'device_type': 'unknown',
+        'architecture': 'unknown',
+        'screen_size': None,
+        'screen_density': None,
         'adb_version': 'unknown',
-        'device_type': 'phone',  # phone, tablet, tv, etc.
-        'architecture': 'unknown'
+        'supported': False,
+        'adb_available': False
     }
-
-    # Check if ADB is available first
-    if not is_adb_available():
-        logger.warning("ADB is not available. Cannot get device information.")
-        device_info['adb_available'] = False
-        return device_info
-
-    device_info['adb_available'] = True
-
     try:
+        result = subprocess.run(["adb", "devices"], capture_output=True, text=True, timeout=5)
+        if "device" in result.stdout and "unauthorized" not in result.stdout:
+            device_info['adb_available'] = True
+        else:
+            device_info['adb_available'] = False
+            return device_info
+
         # Get device manufacturer
         manufacturer_result = subprocess.run(["adb", "shell", "getprop", "ro.product.manufacturer"],
                                            capture_output=True, text=True, timeout=5)
@@ -273,9 +256,10 @@ COMMAND_PATTERNS = {
 }
 
 class AndroidControlMiddleware:
-    def __init__(self):
+    # Remove stray/duplicate constructor
         # Universal Android device compatibility system
-        self.device_info = get_android_device_info()
+    def __init__(self):
+        self.device_info = check_device_connection()
         self.manufacturer = self.device_info['manufacturer']
         self.adb_available = self.device_info.get('adb_available', True)
         self.api_level = self.device_info['api_level']
@@ -387,70 +371,7 @@ class AndroidControlMiddleware:
             }
         }
 
-        # Android version-specific adaptations
-        self.api_adaptations = {
-            'volume_control': {
-                'legacy': lambda: ["adb", "shell", "input", "keyevent", "24"],  # API < 26
-                'modern': lambda: ["adb", "shell", "cmd", "media_session", "volume", "--stream", "3", "--set", "10"]  # API >= 26
-            },
-            'brightness_control': {
-                'legacy': lambda level: ["adb", "shell", "settings", "put", "system", "screen_brightness", level],
-                'modern': lambda level: ["adb", "shell", "settings", "put", "system", "screen_brightness", level]
-            }
-        }
-
-        # Device-specific UI adaptation
-        self.ui_adaptations = {
-            'tablet': {
-                'search_offset': (0.9, 0.08),  # Different UI layout for tablets
-                'status_offset': (0.15, 0.15)
-            },
-            'phone': {
-                'search_offset': (0.85, 0.05),
-                'status_offset': (0.2, 0.18)
-            },
-            'tv': {
-                'search_offset': (0.8, 0.1),
-                'status_offset': (0.25, 0.2)
-            }
-        }
-
-        # Contact lookup cache
-        self.contact_cache = {}
-        self.contact_cache_timestamp = 0
-
-        # Device screen information (will be populated on first use)
-        self.screen_size = None
-        self.screen_density = None
-
-        # App-specific knowledge base
-        self.app_knowledge = {
-            'whatsapp': {
-                'description': 'WhatsApp Messenger for instant messaging and calling',
-                'features': ['Text messaging', 'Voice calls', 'Video calls', 'Group chats', 'Status updates', 'Media sharing'],
-                'common_actions': ['Send message', 'Make call', 'View status', 'Create group', 'Share media']
-            },
-            'snapchat': {
-                'description': 'Snapchat for ephemeral messaging and stories',
-                'features': ['Snaps', 'Stories', 'Chat', 'Discover', 'Spotlight', 'Lenses'],
-                'common_actions': ['Send snap', 'View stories', 'Chat with friends', 'Add friends', 'Use lenses']
-            },
-            'instagram': {
-                'description': 'Instagram for photo and video sharing',
-                'features': ['Feed', 'Stories', 'Reels', 'DMs', 'Live streaming', 'Shopping'],
-                'common_actions': ['Like posts', 'Comment', 'Follow users', 'Send DMs', 'View stories']
-            },
-            'facebook': {
-                'description': 'Facebook social networking platform',
-                'features': ['News Feed', 'Groups', 'Events', 'Messenger', 'Marketplace'],
-                'common_actions': ['Like posts', 'Comment', 'Share content', 'Join groups', 'Send messages']
-            },
-            'youtube': {
-                'description': 'YouTube video streaming platform',
-                'features': ['Video streaming', 'Subscriptions', 'Comments', 'Live streaming', 'Shorts'],
-                'common_actions': ['Watch videos', 'Subscribe to channels', 'Like videos', 'Comment', 'Share videos']
-            }
-        }
+    # Android version-specific adaptations
 
     def get_screen_info(self):
         """Get device screen size and density for coordinate calculations"""

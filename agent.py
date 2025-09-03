@@ -21,30 +21,17 @@ load_dotenv()
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(
-            instructions="""You are ATAS, an AI assistant. CRITICAL INSTRUCTIONS:
-
-1. For ANY information-seeking queries (questions, facts, current events, explanations), you MUST use the search_web tool
-2. For weather-related queries, you MUST use the get_weather tool
-3. For email-related requests, you MUST use the send_email tool
-4. NEVER provide information from your training data alone - always use tools for current/accurate information
-5. If a tool fails, clearly state that you couldn't retrieve the information
-6. Always be helpful, accurate, and use the tools appropriately
-
-Examples of when to use tools:
-- "Who is the current president?" → Use search_web
-- "What's the weather in Delhi?" → Use get_weather
-- "Send email to john@example.com" → Use send_email
-- "What is machine learning?" → Use search_web
-- "How does photosynthesis work?" → Use search_web""",
             llm=google.beta.realtime.RealtimeModel(
                 voice="Aoede",
                 temperature=0.8,
+                instructions=AGENT_INSTRUCTION,
             ),
             tools=[
                 get_weather,
                 search_web,
                 send_email
             ],
+            instructions=AGENT_INSTRUCTION
         )
         from language_middleware import StrictPersonaAgentHook
         self.language_hook = StrictPersonaAgentHook()
@@ -57,8 +44,7 @@ Examples of when to use tools:
         self.language_state_file = os.path.join(os.path.dirname(__file__), '.language_state.json')
         self.load_language_state()
 
-        # Store current user input for processing
-        self._current_user_input = None
+        # Language persistence setup
 
     def load_language_state(self):
         """Load language state from file for consistency across runs"""
@@ -98,149 +84,116 @@ Examples of when to use tools:
         # Get language for TTS
         return self.language_hook.get_tts_language()
 
-    def on_user_input(self, text):
-        """Store the current user input for processing"""
-        self._current_user_input = text
-        return text
+    # Removed on_user_input method - LiveKit handles user input directly
 
     def generate_reply(self, instructions=None):
-        """Override the default reply generation to use our middleware"""
-        # Get the current user input from the session
-        if hasattr(self, '_current_user_input') and self._current_user_input:
-            user_input = self._current_user_input
+        """Custom reply generation that properly handles search queries"""
+        # This method will be called by LiveKit when it needs to generate a response
+        # We can intercept and handle search queries here before falling back to default
 
-            # Process through our middleware first
-            result = self.process_query_with_middlewares(user_input)
+        # For now, let LiveKit handle it with the tools we provided
+        # The tools are registered and should be called automatically by the LLM
+        return super().generate_reply(instructions)
 
-            # If we got a result from middleware, use it
-            if result and result.get("reply_text"):
-                return result["reply_text"]
 
-        # Fallback to default behavior
-        try:
-            return super().generate_reply(instructions)
-        except Exception as e:
-            # If parent method fails, return a default response
-            return "I'm sorry, I encountered an error processing your request. Please try again."
-
-    def process_query_with_middlewares(self, user_text):
-        # Initialize web_result
+    async def process_query_with_middlewares(self, user_text):
+        """
+        Improved: Handles Android commands, language switching, web search, and human-like conversation.
+        Always replies in user's language and uses only tool/web search results for info queries.
+        """
         web_result = None
-
-        # Always detect user language and maintain consistency
         self.language_hook.process_user_input(user_text)
         detected_lang = self.language_hook.user_lang
 
-        # Check for Android app/device control commands first
+        # Android device control
         android_result = self.android_hook.process_user_command(user_text)
         if android_result:
             agent_reply = android_result
         else:
-            # Enhanced intent detection with better classification
             user_text_lower = user_text.lower().strip()
-
-            # Priority 1: Tool-specific requests (highest priority)
+            # Tool keywords
             tool_keywords = {
                 'weather': ['weather', 'temperature', 'forecast', 'rain', 'sunny', 'climate'],
                 'email': ['email', 'mail', 'send', 'gmail', 'message', 'compose'],
                 'search': ['search', 'find', 'look up', 'google', 'duckduckgo', 'browse']
             }
-
-            # Check for explicit tool requests
             tool_detected = False
             for tool, keywords in tool_keywords.items():
                 if any(keyword in user_text_lower for keyword in keywords):
                     tool_detected = True
                     if tool == 'weather':
-                        # Extract city name from user text
                         city_match = re.search(r'weather (?:in|for|of) (\w+)', user_text_lower)
                         if city_match:
                             city = city_match.group(1).title()
-                            # Call weather tool directly
                             try:
-                                # For now, use a simple weather response
-                                agent_reply = f"I'll check the weather for {city}."
-                            except Exception as e:
+                                agent_reply = await get_weather(city)
+                            except Exception:
                                 agent_reply = f"I couldn't get weather information for {city} right now."
                         else:
                             agent_reply = "Please specify a city name for weather information (e.g., 'weather in Delhi')."
                         break
                     elif tool == 'email':
-                        # Check if all required email parameters are present
                         email_match = re.search(r'send email to (\S+) subject (.+?) message (.+)', user_text_lower, re.IGNORECASE)
                         if email_match:
                             to_email, subject, message = email_match.groups()
-                            # Call email tool
                             try:
-                                agent_reply = f"I'll send an email to {to_email} with subject '{subject}'."
-                            except Exception as e:
+                                agent_reply = await send_email(to_email, subject, message)
+                            except Exception:
                                 agent_reply = "I couldn't send the email right now. Please check your email configuration."
                         else:
                             agent_reply = "To send an email, please say: 'send email to [email] subject [subject] message [message]'"
                         break
                     elif tool == 'search':
-                        # Let the LiveKit tool handle the search
-                        agent_reply = f"I'll search for information about: {user_text}"
+                        try:
+                            web_result = await search_web(user_text)
+                            # Always use only the search result for reply
+                            agent_reply = web_result if web_result else "No results found."
+                        except Exception:
+                            agent_reply = "I couldn't retrieve search results right now."
                         break
 
             if not tool_detected:
-                # Continue with information-seeking detection
-                # Priority 2: Clear information-seeking questions (medium priority)
+                # Info-seeking detection
                 question_patterns = [
                     'what is', 'who is', 'when did', 'where is', 'why does', 'how does', 'how to',
                     'tell me about', 'explain', 'define', 'meaning of', 'difference between',
                     'what are', 'who are', 'when was', 'where are', 'why is', 'how do',
                     'can you tell me', 'do you know', 'i want to know'
                 ]
-
                 info_keywords = [
                     'current', 'latest', 'news', 'update', 'fact', 'information', 'details about',
                     'history of', 'origin of', 'cause of', 'reason for', 'about', 'regarding',
                     'population', 'capital', 'area', 'located', 'founded', 'established'
                 ]
-
                 is_clear_question = any(pattern in user_text_lower for pattern in question_patterns)
                 has_info_keywords = any(kw in user_text_lower for kw in info_keywords)
-
-                # Enhanced search detection
                 info_keyword_count = sum(1 for kw in info_keywords if kw in user_text_lower)
                 has_question_mark = '?' in user_text
                 is_imperative_search = any(word in user_text_lower for word in ['search', 'find', 'look up', 'google', 'tell me'])
-
-                # More aggressive search triggering
-                needs_search = (is_clear_question or has_question_mark or is_imperative_search or
-                              info_keyword_count >= 1 or len(user_text.split()) > 8)
-
+                needs_search = (is_clear_question or has_question_mark or is_imperative_search or info_keyword_count >= 1 or len(user_text.split()) > 8)
                 if needs_search:
-                    # Let the LiveKit framework handle search through tools
-                    agent_reply = f"I'll search for information about: {user_text}"
+                    try:
+                        web_result = await search_web(user_text)
+                        agent_reply = web_result if web_result else "No results found."
+                    except Exception:
+                        agent_reply = "I couldn't retrieve search results right now."
                 else:
-                    # Priority 3: Casual conversation (lowest priority - use agent)
-                    agent_reply = AGENT_INSTRUCTION.split("# Examples")[0].strip()
+                    # Casual conversation: reply as a human, use persona
+                    agent_reply = "Of course, Sir. How may I assist you today?" if user_text_lower in ["hi", "hello", "hey"] else AGENT_INSTRUCTION.split("# Examples")[0].strip()
 
-
-        # Always reply in user's detected language and persona, strictly following prompt.py
-        final_reply = self.language_hook.process_agent_output(agent_reply)
-
-        # Strict TTS integration (patch, does not touch original code)
+        # Always reply in user's detected language
+        translated_reply = self.language_hook.process_agent_output(agent_reply)
         if self.strict_tts_sync is None:
             from tts_sync_middleware import StrictTTSSyncMiddleware
             self.strict_tts_sync = StrictTTSSyncMiddleware()
-
-        # Save language state for consistency across runs
         self.save_language_state()
-
-        # Use web_result if available for strict TTS (now properly scoped)
-        tts_text = self.strict_tts_sync.get_strict_tts_text(final_reply, web_result, persona='female', tts_lang=self.language_hook.get_tts_language())
+        tts_text = self.strict_tts_sync.get_strict_tts_text(translated_reply, web_result, persona='female', tts_lang=self.language_hook.get_tts_language())
         tts_lang = self.language_hook.get_tts_language()
-        # tts_plugin.speak(tts_text, language=tts_lang)
         return {
-            "reply_text": final_reply,
+            "reply_text": translated_reply,
             "tts_text": tts_text,
             "tts_lang": tts_lang
         }
-        
-
 
 async def entrypoint(ctx: agents.JobContext):
     agent = Assistant()
